@@ -15,7 +15,35 @@ defmodule Lorax do
   Documentation for `Lorax`.
   """
 
-  # update nodes so that target is moved to dummy position, lora replaces target's position
+  # 1. Move target node into a dummy container
+  # 2. Make dummy be the input into lora
+  # 3. Have lora node replaces target's position
+  #
+  # Beginning
+  # ======
+  # parent (id: 0) -> target (id: 1)
+  #
+  # Create dummy container
+  # ======
+  # parent (id: 0) -> target (id: 1) -> dummy (id: 2)
+  #
+  # Create lora node with input ids = [0, 2]
+  # ======
+  # parent (id: 0) -> target (id: 1) -> dummy (id: 2) -> lora (id: 3)
+  #                ------------------------------------> lora (id: 3)
+  #
+  # target takes dummy's id, throw away dummy
+  # =====
+  # parent (id: 0) ->          target (id: 2)         -> lora (id: 3)
+  #                ------------------------------------> lora (id: 3)
+  #
+  # lora takes target's original id
+  # =====
+  # parent (id: 0) ->          target (id: 2)          -> lora (id: 1)
+  #                -------------------------------------> lora (id: 1)
+  #
+  # lora and target have now been swapped
+  # any downstream node whose input was 1, will now take the lora values
   def inject(%Axon{} = axon, %Config{} = config) do
     target_nodes = get_target_nodes(axon, config)
 
@@ -39,7 +67,7 @@ defmodule Lorax do
       lora_node = %Axon.Node{lora_node | id: target_id}
       target_node = %Axon.Node{target_node | id: dummy_id}
 
-      # update container's map of nodes so that
+      # update Axon container's map of nodes so that
       # 1. whenever downstream nodes reference target_id, it'll now point to our lora node
       # 2. whenever lora node references dummy id, it'll take the output value (Wx) from target
       new_nodes =
@@ -84,7 +112,6 @@ defmodule Lorax do
     Nx.add(wx, bax)
   end
 
-  # The shape of x and Wx will be fed into these functions
   defp dense_kernel_a(x_shape, _wx_shape, r) do
     {r, elem(x_shape, Nx.rank(x_shape) - 1)}
   end
