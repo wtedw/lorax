@@ -8,12 +8,13 @@ defmodule Lorax.Params do
     end)
   end
 
-  def serialize_params(lora_params, original_keys, serialize_opts \\ []) do
+  def serialize(lora_params, original_params, serialize_opts \\ []) do
+    original_keys = Map.keys(original_params)
     lora_params = Map.drop(lora_params, original_keys)
     Nx.serialize(lora_params, serialize_opts)
   end
 
-  def load_params!(params_path) do
+  def file_load!(params_path) do
     File.read!(params_path)
     |> Nx.deserialize()
   end
@@ -28,7 +29,7 @@ defmodule Lorax.Params do
         filename \\ "params.lorax",
         label \\ "Lora Params"
       ) do
-    iodata = serialize_params(lora_params, original_params |> Map.keys())
+    iodata = serialize(lora_params, original_params)
     binary = IO.iodata_to_binary(iodata)
 
     Kino.Download.new(
@@ -40,7 +41,7 @@ defmodule Lorax.Params do
 
   # This should probably be a Kino smart cell or something
   # Note: This only returns the LoRA params, to run a model, you need to merge the original params
-  def kino_load_file!(%Kino.Input{} = kino_input) do
+  def kino_file_load!(%Kino.Input{} = kino_input) do
     value = Kino.Input.read(kino_input)
 
     case value do
@@ -51,7 +52,7 @@ defmodule Lorax.Params do
         path = Kino.Input.file_path(value.file_ref)
 
         try do
-          load_params!(path)
+          file_load!(path)
         rescue
           ArgumentError -> raise "Invalid param file"
         end
