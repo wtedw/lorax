@@ -26,7 +26,7 @@ This notebook demonstrates how to run a text-generating model like GPT2 with LoR
 2. Merge the LoRA parameters with the base model weights.
 3. Run the model
 
-We'll be using a LoRA file I trained on the Elixir Chat/Discussion section. It was trained on my M1 Pro with batch_size = 2, seq_length = 512, r = 4, alpha = 8, dropout = 0.05. The training set is about 3.3 million tokens, and I trained over it about 3 times. My energy bills here are crazy expensive, so I didn't do anything too elite.
+We'll be using a LoRA file that was trained on the Elixir Chat/Discussion section. The data can be found [here](https://github.com/wtedw/lorax/blob/main/data/elixir-discussion.txt).
 
 ## Load original model
 
@@ -106,7 +106,7 @@ lora_only_params |> Map.keys()
 # input = Kino.Input.file("Lorax Params")
 #
 # cell #2 
-# lora_only_params = Lorax.Params.kino_load_file!(input)
+# lora_only_params = Lorax.Params.kino_file_load!(input)
 # merged_params = Lorax.Params.merge_params(lora_only_params, gpt2_params)
 ```
 
@@ -180,17 +180,9 @@ The training data is formatted like this:
 
 <author>WildYorkies</author>
 
-I remember seeing on the Elixir subreddit a long time ago that a user was building a Discord alternative (Probably because Discord mines all data for profit and is closed source).
-I doubt that project kept going (it’s quite ambitious after all).
-[...]
+I remember seeing on the Elixir subreddit [...]
 
 <likes>3 likes</likes>
-
-<author>WildYorkies</author>
-
-I know there is an Elixir GUI system in the works, but for now, the obvious choice would put Elixir only as the backend and something like React Native / Proton Native as the frontend.
-
-<likes>0 likes</likes>
 ```
 
 You can simulate a thread by kickstarting the text generation with some `<thread>title</title>` string, and the LLM will give a prediction of what the general Elixir community will say.
