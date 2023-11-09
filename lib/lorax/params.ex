@@ -19,10 +19,6 @@ defmodule Lorax.Params do
     |> Nx.deserialize()
   end
 
-  def merge_params(lora_params, og_params) do
-    Map.merge(og_params, lora_params)
-  end
-
   def kino_download(
         lora_params,
         original_params,

@@ -131,7 +131,7 @@ lora_only_params |> Map.keys()
 Axon expects one single map of all the parameter values. So although we've loaded the LoRA params, we need to merge them with the original parameters.
 
 ```elixir
-merged_params = Lorax.Params.merge_params(lora_only_params, gpt2_params)
+merged_params = Map.merge(gpt2_params, lora_only_params)
 
 :ok
 ```
