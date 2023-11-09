@@ -9,7 +9,7 @@ Mix.install([
   {:nx, "~> 0.6.1"},
   {:exla, "~> 0.6.1"},
   {:explorer, "~> 0.7.0"},
-  {:lorax, git: "https://github.com/spawnfest/lorax.git"},
+  {:lorax, git: "https://github.com/wtedw/lorax.git"},
   # {:lorax, path: "/Users/ted/CS/elixir/lorax"},
   {:req, "~> 0.4.0"},
   {:kino, "~> 0.11.0"}
@@ -18,15 +18,17 @@ Mix.install([
 Nx.default_backend(EXLA.Backend)
 ```
 
-## Mimicking the Elixirforum Help Section
+## Introduction
 
-One great benefit to LoRA is the file size of the fine-tuned parameters. What we can do is load one of the parameters named `elixirforum-help-section.lorax` and upload it to the Kino input down below.
+This notebook demonstrates how to run a text-generating model like GPT2 with LoRA. The basic steps:
 
-The other notebook in this package fine-tuned the GPT2 model to learn the associations typically found in an Elixirforum thread.
+1. Define the model as it was during fine-tuning
+2. Merge the LoRA parameters with the base model weights.
+3. Run the model
 
-The average computer should be able to run the GPT2 inference without much problems. You'll see that it generates some random thread you may find in the help section.
+We'll be using a LoRA file I trained on the Elixir Chat/Discussion section. It was trained on my M1 Pro with batch_size = 2, seq_length = 512, r = 4, alpha = 8, dropout = 0.05. The training set is about 3.3 million tokens, and I trained over it about 3 times. My energy bills here are crazy expensive, so I didn't do anything too elite.
 
-## Load model
+## Load original model
 
 ```elixir
 {:ok, spec} = Bumblebee.load_spec({:hf, "gpt2"})
@@ -42,47 +44,16 @@ The average computer should be able to run the GPT2 inference without much probl
 <!-- livebook:{"output":true} -->
 
 ```
-
-19:49:03.661 [info] TfrtCpuClient created.
-
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-:ok
-```
-
-## Upload Params
-
-```elixir
-input = Kino.Input.file("Lorax Params")
-```
-
-## Load Param File
-
-Although we've loaded the LoRA params, we still need the original parameters (the extremely large ones). We'll merge the parameters into one single mapping of layers -> tensor values, and Axon will be able to run it
-
-```elixir
-lora_params = Lorax.Params.kino_load_file!(input)
-merged_params = Lorax.Params.merge_params(lora_params, gpt2_params)
-
-:ok
-```
-
-<!-- livebook:{"output":true} -->
-
-```
 :ok
 ```
 
 ## Define LoRA Model
 
-Axon keeps the model definition as code. So we need to modify the definition of the GPT2 layers, so it contains the injected LoRA layers. This is the same definition found in the other notebook that trained the LoRA GPT2 model.
+Inject LoRA layers as it was during fine-tuning to ensure correct model compilation.
 
 ```elixir
-r = 8
-lora_alpha = 16
+r = 4
+lora_alpha = 8
 lora_dropout = 0.05
 
 lora_model =
@@ -108,7 +79,72 @@ lora_model =
 >
 ```
 
+## Load LoRA Params
+
+There's 3 main ways to load your LoRA params
+
+1. URL: Use whatever HTTP library to retrieve the binary, and Nx.deserialize to get the map of tensor values
+2. File: Similar flow as URL. use File.read to retrieve the binary, Nx.deserialize. For convenience, you can use Lorax.Params.file_load!()
+3. Kino: GUI file picker. This requires a two-step process. You need to have one Kino input cell, and another cell to read the file input.
+
+See the code below for examples
+
+```elixir
+# Method 1: URL downlaod 
+lora_serialized =
+  Req.get!("https://raw.githubusercontent.com/wtedw/lorax/main/params/elixir-chat-r4a8.lorax").body
+
+lora_only_params = Nx.deserialize(lora_serialized)
+
+lora_only_params |> Map.keys()
+
+# Method 2: File download
+# lora_only_params = Lorax.Params.file_load!("<insert local path>")
+
+# Method 3: Kino
+# cell #1 
+# input = Kino.Input.file("Lorax Params")
+#
+# cell #2 
+# lora_only_params = Lorax.Params.kino_load_file!(input)
+# merged_params = Lorax.Params.merge_params(lora_only_params, gpt2_params)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+["dropout_28", "decoder.blocks.5.self_attention_dropout", "lora_11", "lora_31", "lora_10",
+ "decoder.blocks.11.self_attention_dropout", "dropout_9", "lora_28", "dropout_25",
+ "decoder.blocks.1.self_attention_dropout", "lora_13", "lora_20", "lora_7", "dropout_6", "lora_19",
+ "decoder.blocks.2.self_attention_dropout", "lora_5", "lora_30",
+ "decoder.blocks.7.self_attention_dropout", "lora_2", "lora_24", "dropout_1", "lora_6",
+ "dropout_10", "dropout_3", "dropout_15", "lora_27", "dropout_7", "lora_35", "lora_22",
+ "dropout_21", "decoder.blocks.3.self_attention_dropout", "lora_0", "dropout_27", "dropout_24",
+ "lora_9", "decoder.blocks.4.self_attention_dropout", "lora_32", "dropout_34",
+ "decoder.blocks.10.self_attention_dropout", "lora_23", "dropout_0",
+ "decoder.blocks.6.self_attention_dropout", "lora_12", "dropout_16", "lora_34", "dropout_19",
+ "lora_18", "lora_3", "lora_17", ...]
+```
+
+## Merge Params
+
+Axon expects one single map of all the parameter values. So although we've loaded the LoRA params, we need to merge them with the original parameters.
+
+```elixir
+merged_params = Lorax.Params.merge_params(lora_only_params, gpt2_params)
+
+:ok
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
 ## Inference Prepwork
+
+The sampling method used here is non-deterministic, so the output is different everytime you run this cell + the bottom cell. Using top_p value of 0.6 may generate more coherent sentences, but tends to repeat. 0.7 and 0.8 is a good sweet spot.
 
 ```elixir
 lora_model_info = %{model: lora_model, params: merged_params, spec: spec}
@@ -116,7 +152,7 @@ lora_model_info = %{model: lora_model, params: merged_params, spec: spec}
 lora_generation_config =
   Bumblebee.configure(generation_config,
     max_new_tokens: 512,
-    strategy: %{type: :multinomial_sampling, top_p: 0.8}
+    strategy: %{type: :multinomial_sampling, top_p: 0.7}
   )
 
 serving =
@@ -132,79 +168,55 @@ Kino.start_child({Nx.Serving, name: Llama, serving: serving})
 <!-- livebook:{"output":true} -->
 
 ```
-{:ok, #PID<0.921.0>}
+{:ok, #PID<0.9126.0>}
 ```
 
 ## Inference Results
 
-As far as I can tell, the model doesn't generate any user that actually exists in the Elixirforums. But a real username may pop up if you run it enough times. The training data can be found in the `data` directory. The structure of every thread goes something like
-
-```
-Title: ...
-
-Author: bob
-
-<user submitted text>
-
-[number of likes]
-```
-
 ```elixir
-Nx.Serving.batched_run(Llama, "Title: ") |> Enum.each(&IO.write/1)
+Nx.Serving.batched_run(
+  Llama,
+  "<title>Let's add OOP to Elixir!</title>"
+)
+|> Enum.each(&IO.write/1)
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-{"foo"}}
-
-}
-
-[0 likes]
-
-naicmin:
-
-Thanks for the help. I am still having trouble figuring out how to avoid at least one of the hash tags used to infer the response (or cache all pending responses), but the problem appears to be getting much better.
-If it’s a valid response, then you should go back and check it out.
-If not, please allow me to help you solve it, or maybe I can help you.
-I would love to know the exact address of the cache when that gets logged in, or if this was being set up as the root request, etc.
-
-[1 like]
-
-cladd:
-
-What does it mean for phx.h to log in to a new location when they ask for user info?
-
-[1 like]
-
-naicmin:
-
-Thanks for your help! I’m using phx.h in order to query the user database but will need to pass the route to add a parameter to get to the node so the user is there.
-If this is a new request, then you can use this to force phx.h to log in as the root, but I don’t have enough time to figure it out (hopefully I will not see that happening in the near future).
-
-[0 likes]
 
 
-Title: How to search for an exe string in /etc/cache/exe/exe.ex?
+<author>DrakeRose</author>
 
-keventty:
+Hi everyone,
 
-How to search for an exe string in /etc/cache/exe/exe.ex? Yes
-As per your question, which part of this part is used to enter the output and index? The entry is not in the external JSON cache as it was provided by /etc/cache/exe/exe.ex
-If the error happens with the default stack error, then look for it in the web exit prompt.
+I am using Elixir to build applications and much of my workflow is already using OOP. I’m glad to see OOP has improved. I know there are some companies and agencies who have really good OOP products that are not really for them. I am going to use OOP instead. I think OOP is probably the most efficient language for this. I have worked in the Elixir software industry for a while now and I have a deep interest in learning OOP.
 
-[0 likes]
+<likes>0 likes</likes>
 
-joevashd:
+<author>RhodaiBrundle</author>
 
-It is still unclear if this is a caching issue (or just a network issue).
+A quick list of OOP projects:
+OOP Stack #2 - Octopus library to be used in Erlang 1 Likes
 
-[0 likes]
+<likes>1 like</likes>
 
-keventty:
+<author>mkaldaric</author>
 
-This is just a very basic guideline: get rid of the default stack header and ignore exe string in /etc/cache/exe/exe.ex.
-You will not need to fetch the image when /etc/cache/exe/ex
+I love OOP, but I really don’t know what I would call OOP-like or something.
+What I do know is that I do want to use OOP to my application as a stand-alone language. I’ve tried using Elixir, Clojure, Python, Elixir, Go, Erlang, Elixir/Elixir (like I’m using Rust) and OTP in my language. I would use Elixir or Rust if I wanted to get the best performance out of the system. I also like using Rust because it’s written in Rust and has high efficiency and features. I do not have any Elixir and the code is easy to write. It is, however, very easy to add or delete a feature or class.
+
+<likes>0 likes</likes>
+
+<author>DrakeRose</author>
+
+I’m working on OTP as a stand-alone language in Elixir and I like it a lot. I am writing a lot of tests and not really using OTP, but I’m using Elixir as a stand-alone language in Elixir for an Elixir project. I want to have this tool as a stand-alone language to be used by Erlang.
+
+<likes>1 like</likes>
+
+<author>troy_sarmiento</author>
+
+I’ve been using Elixir and Elixir for a while now and I’m really happy to see it on the Elixir OS. It
 ```
 
 <!-- livebook:{"output":true} -->
