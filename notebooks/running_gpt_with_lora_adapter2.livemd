@@ -168,15 +168,37 @@ Kino.start_child({Nx.Serving, name: Llama, serving: serving})
 <!-- livebook:{"output":true} -->
 
 ```
-{:ok, #PID<0.9126.0>}
+{:ok, #PID<0.9144.0>}
 ```
 
 ## Inference Results
 
+The training data is formatted like this:
+
+```
+<title>Ideas for an Open Source Discord</title>
+
+<author>WildYorkies</author>
+
+I remember seeing on the Elixir subreddit a long time ago that a user was building a Discord alternative (Probably because Discord mines all data for profit and is closed source).
+I doubt that project kept going (it’s quite ambitious after all).
+[...]
+
+<likes>3 likes</likes>
+
+<author>WildYorkies</author>
+
+I know there is an Elixir GUI system in the works, but for now, the obvious choice would put Elixir only as the backend and something like React Native / Proton Native as the frontend.
+
+<likes>0 likes</likes>
+```
+
+You can simulate a thread by kickstarting the text generation with some `<thread>title</title>` string, and the LLM will give a prediction of what the general Elixir community will say.
+
 ```elixir
 Nx.Serving.batched_run(
   Llama,
-  "<title>Let's add OOP to Elixir!</title>"
+  "<title>Elixir 2.0 is released! New features include</title>"
 )
 |> Enum.each(&IO.write/1)
 ```
@@ -186,37 +208,95 @@ Nx.Serving.batched_run(
 ```
 
 
-<author>DrakeRose</author>
+<author>xjalasz</author>
 
-Hi everyone,
-
-I am using Elixir to build applications and much of my workflow is already using OOP. I’m glad to see OOP has improved. I know there are some companies and agencies who have really good OOP products that are not really for them. I am going to use OOP instead. I think OOP is probably the most efficient language for this. I have worked in the Elixir software industry for a while now and I have a deep interest in learning OOP.
-
-<likes>0 likes</likes>
-
-<author>RhodaiBrundle</author>
-
-A quick list of OOP projects:
-OOP Stack #2 - Octopus library to be used in Erlang 1 Likes
+Elixir 2.0 is released! New features include
+This means that you can now deploy your Elixir 2 projects without having to use a tool like docker.
 
 <likes>1 like</likes>
 
-<author>mkaldaric</author>
+<author>jake</author>
 
-I love OOP, but I really don’t know what I would call OOP-like or something.
-What I do know is that I do want to use OOP to my application as a stand-alone language. I’ve tried using Elixir, Clojure, Python, Elixir, Go, Erlang, Elixir/Elixir (like I’m using Rust) and OTP in my language. I would use Elixir or Rust if I wanted to get the best performance out of the system. I also like using Rust because it’s written in Rust and has high efficiency and features. I do not have any Elixir and the code is easy to write. It is, however, very easy to add or delete a feature or class.
-
-<likes>0 likes</likes>
-
-<author>DrakeRose</author>
-
-I’m working on OTP as a stand-alone language in Elixir and I like it a lot. I am writing a lot of tests and not really using OTP, but I’m using Elixir as a stand-alone language in Elixir for an Elixir project. I want to have this tool as a stand-alone language to be used by Erlang.
+As always, thanks for the help.
+I am on a 10 day cruise to Toronto in July with the goal of finishing up Elixir 2.0 in less than one week.
 
 <likes>1 like</likes>
 
-<author>troy_sarmiento</author>
+<author>pianotato</author>
 
-I’ve been using Elixir and Elixir for a while now and I’m really happy to see it on the Elixir OS. It
+Thanks for all the support!
+
+<likes>0 likes</likes>
+
+<author>thekali</author>
+
+Thanks for your time and effort.
+
+<likes>0 likes</likes>
+
+<author>mangai</author>
+
+Thank you! I have no idea how long you have been on this blog.
+
+<likes>1 like</likes>
+
+<author>juicy_champion</author>
+
+Thanks!
+
+<likes>0 likes</likes>
+
+<author>haha<likes>1 like</likes>
+
+<author>thompson3</author>
+
+Thank you for the support!
+
+<likes>0 likes</likes>
+
+<author>phrobotics</author>
+
+Thanks for your time and effort.
+
+<likes>0 likes</likes>
+
+<author>yelp</author>
+
+Thanks!
+
+<likes>0 likes</likes>
+
+<author>phrobotics</author>
+
+Thanks!
+
+<likes>0 likes</likes>
+
+<author>jake</author>
+
+Thanks for your time and effort.
+
+<likes>0 likes</likes>
+
+<author>jake</author>
+
+Thanks!
+
+<likes>0 likes</likes>
+
+<author>juicy_champion</author>
+
+Thanks!
+
+<likes>0 likes</likes>
+
+<author>juicy_champion</author>
+
+Thanks!
+
+<likes>0 likes</likes>
+
+<author>gw
 ```
 
 <!-- livebook:{"output":true} -->
