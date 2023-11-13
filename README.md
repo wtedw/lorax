@@ -1,15 +1,8 @@
 # Lorax
 
 This package implements Low-Rank Adaptation (LoRA), a popular method for fine-tuning large language models.
-LoRA introduces a more efficient method for adaptation by freezing the original model weights and injecting trainable rank decomposition matrices. This results in a dramatic reduction in the number of parameters needing updates and cuts down on the GPU memory needed, making it a much more affordable and practical solution for users who don’t have access to high-end GPU hardware.
 
 ![lora diagram](https://raw.githubusercontent.com/spawnfest/lorax/main/diagram.png)
-
-## Key Benefits:
-
-- _Efficiency_: LoRA decreases the number of trainable parameters by up to 10,000 times and reduces GPU memory usage by 3 times compared to traditional fine-tuning methods.
-- _Performance_: Despite the reduction in trainable parameters, LoRA exhibits comparable or even superior performance to full fine-tuning on various models (RoBERTa, DeBERTa, GPT-2, GPT-3) across different benchmarks.
-- _Storage Space_: LoRA parameters are impressively compact, taking up only a few megabytes.
 
 ## How To Fine-tune an LLM
 
@@ -62,36 +55,6 @@ Training
 Text Generation
 - multinomial sampling
 - p = 0.06 or 0.08 for more variety (or if you experience repetitive results)
-```
-
-## Manually targeting specific nodes
-
-The authors behind the LoRA paper also noted that targeting nodes outside of QKV like the self attention output can be beneficial to approach the results of full-finetuning.
-
-Here's how you could target only the output node.
-
-```
-lora_model =
-  model
-  |> Axon.freeze()
-  |> Lorax.inject(%Lorax.Config{
-    r: 2,
-    alpha: 4,
-    dropout: 0.1,
-    target_node_fn: fn %Axon.Node{name: name_fn} ->
-      # names are generated lazily, and look like "decoder.blocks.11.self_attention.value"
-      # have to invoke the function to see what layer the node represents
-      # https://github.com/elixir-nx/axon/blob/v0.6.0/lib/axon.ex#L3923
-      name = name_fn.(nil, nil)
-      shortname = String.split(name, ".") |> List.last()
-
-      if shortname == "output" do
-        true
-      else
-        false
-      end
-    end
-  })
 ```
 
 ## Limitations

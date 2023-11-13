@@ -7,25 +7,36 @@ defmodule Lorax.MixProject do
       version: "0.1.0",
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      docs: [
+        extras: [
+          "guides/running_gpt_with_lora.livemd",
+          "guides/training_gpt_with_lora.livemd",
+        ],
+        before_closing_body_tag: fn
+          :html ->
+            """
+            <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+            <script>mermaid.initialize({startOnLoad: true})</script>
+            """
+          _ -> ""
+        end
+      ]
     ]
   end
 
-  # Run "mix help compile.app" to learn about applications.
   def application do
     [
       extra_applications: [:logger]
     ]
   end
 
-  # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:axon, "~> 0.6.0"},
       {:nx, "~> 0.6.0"},
-      {:kino, "~> 0.11.0"}
+      {:kino, "~> 0.11.0"},
     ]
   end
 end

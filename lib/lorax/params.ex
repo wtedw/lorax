@@ -1,42 +1,28 @@
 defmodule Lorax.Params do
-  def param_size(%{} = params) do
-    Enum.reduce(params, 0, fn {_k, v}, param_size ->
-      layer_param_size =
-        Enum.reduce(v, 0, fn {_layer_name, tensor}, acc -> acc + Nx.size(tensor) end)
+  @moduledoc """
+  Helper module for loading, downloading, filtering, and calculating the size of Axon parameters
+  """
 
-      param_size + layer_param_size
-    end)
-  end
-
-  def serialize(lora_params, original_params, serialize_opts \\ []) do
+  @doc """
+  Returns LoRA only params from a merged param map
+  """
+  def filter(lora_merged_params, original_params) do
     original_keys = Map.keys(original_params)
-    lora_params = Map.drop(lora_params, original_keys)
-    Nx.serialize(lora_params, serialize_opts)
+    Map.drop(lora_merged_params, original_keys)
   end
 
+  @doc """
+  Loads parameters from file path
+  """
   def file_load!(params_path) do
     File.read!(params_path)
     |> Nx.deserialize()
   end
 
-  def kino_download(
-        lora_params,
-        original_params,
-        filename \\ "params.lorax",
-        label \\ "Lora Params"
-      ) do
-    iodata = serialize(lora_params, original_params)
-    binary = IO.iodata_to_binary(iodata)
-
-    Kino.Download.new(
-      fn -> binary end,
-      filename: filename,
-      label: label
-    )
-  end
-
-  # This should probably be a Kino smart cell or something
-  # Note: This only returns the LoRA params, to run a model, you need to merge the original params
+  @doc """
+  Creates Kino cell for uploading serialized params file
+  Must be placed in the last line of a Livebook cell.
+  """
   def kino_file_load!(%Kino.Input{} = kino_input) do
     value = Kino.Input.read(kino_input)
 
@@ -53,5 +39,36 @@ defmodule Lorax.Params do
           ArgumentError -> raise "Invalid param file"
         end
     end
+  end
+
+  @doc """
+  Creates Kino cell for downloading params map.
+  Must be placed in the last line of a Livebook cell
+  """
+  def kino_download(
+        params,
+        filename \\ "params.lorax",
+        label \\ "Download Params"
+      ) do
+    iodata = Nx.serialize(params)
+    binary = IO.iodata_to_binary(iodata)
+
+    Kino.Download.new(
+      fn -> binary end,
+      filename: filename,
+      label: label
+    )
+  end
+
+  @doc """
+  Calculates total bytes of the tensors inside a parameter map
+  """
+  def size(%{} = params) do
+    Enum.reduce(params, 0, fn {_k, v}, param_size ->
+      layer_param_size =
+        Enum.reduce(v, 0, fn {_layer_name, tensor}, acc -> acc + Nx.size(tensor) end)
+
+      param_size + layer_param_size
+    end)
   end
 end

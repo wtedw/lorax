@@ -1,7 +1,105 @@
 defmodule Lorax do
+  @moduledoc """
+  Experimental Low-Rank Adaptation (LoRA) implementation
+
+  ## LoRA model creation
+  To create a LoRA model, freeze an existing model and inject LoRA layers using `Lorax.inject/2`.
+
+  ```
+  lora_model =
+    model
+    |> Axon.freeze()
+    |> Lorax.inject(%Lorax.Config{
+      r: 2,
+      alpha: 4,
+      dropout: 0.05,
+      target_key: true,
+      target_query: true,
+      target_value: true
+    })
+  ```
+
+  For more detailed guides, see
+  1. [Training LoRAs](training_gpt_with_lora.livemd)
+  1. [Running LoRAs](running_gpt_with_lora.livemd)
+
+
+  LoRA layers are implemented by injecting new nodes into the Axon struct.
+  These nodes represent the B and A matrices. Each node takes an input `x` and computes `BAx`.
+  Furthermore, the LoRA node will receive `Wx` as an input and compute `Wx + BAx`.
+  This isn't the standard implementation, but it simplifies the injection process.
+
+  ## Injection Process
+
+  Beginning state
+  <div class="mermaid">
+  flowchart LR
+    A[input id:0] --> B[target id:1]
+  </div>
+
+  Create an empty dummy node
+  <div class="mermaid">
+  flowchart LR
+    A[input id:0] --> B[target id:1] --> C[dummy id:2]
+  </div>
+
+  Create lora node with input ids = [0, 2]
+  <div class="mermaid">
+  flowchart LR
+    A[input id:0] --> B[target id:1] --> C[dummy id:2] --> E[lora id:3]
+    A[input id:0] --> E[lora id:3]
+  </div>
+
+  target takes dummy's id, throw away dummy node
+  <div class="mermaid">
+  flowchart LR
+    A[input id:0] --> C[target id:2]
+    C[target id:2] --> E[lora id:3]
+    A[input id:0] --> E[lora id:3]
+  </div>
+
+
+  lora takes target's original id
+  <div class="mermaid">
+  flowchart LR
+    A[input id:0] --> C[target id:2] --> E[lora id:1]
+    A[input id:0] --> E[lora id:1]
+  </div>
+
+
+  lora and target are now swapped.
+  Any downstream node that relied on node id:1 will now receive `Wx + BAx`
+  """
+
   import Nx.Defn
 
   defmodule Config do
+    @moduledoc """
+    Config for `Lorax.inject/2`
+
+    `r` is the rank in the low-rank matrices used in LoRA.
+    A higher value of r increases the expressiveness of the adaptation,
+    However, it also increases the number of parameters and the computational
+    cost. Conversely, a lower value of r makes the adaptation simpler and less
+    resource-intensive. Defaults to 1.
+
+    `alpha` is a scaling factor that controls the magnitude of changes introduced
+    by the low-rank matrices. A higher value of `alpha` means that the
+    modifications made by LoRA have a greater impact on the model's original
+    weights. This can lead to more significant changes in the model's behavior.
+    A lower value results in more subtle changes. Defaults to 2.
+
+    `dropout` specifies the dropout rate applied to the low-rank matrices.
+
+    `target_query` specifies whether to apply LoRA to all key nodes in an
+    attention block. Defaults to true.
+
+    `target_value` specifies whether to apply LoRA to all value nodes in an
+    attention block. Defaults to false.
+
+    `target_key` specifies whether to apply LoRA to all value nodes in an
+    attention block. Defaults to true.
+    """
     defstruct r: 1,
               alpha: 2,
               dropout: 0.0,
@@ -11,39 +109,51 @@ defmodule Lorax do
               target_node_fn: nil
   end
 
-  @moduledoc """
-  Documentation for `Lorax`.
-  """
+  @doc """
+  Returns a modified Axon model with LoRA nodes inserted according to the provided configuration.
 
-  # 1. Move target node into a dummy container
-  # 2. Make dummy be the input into lora
-  # 3. Have lora node replaces target's position
-  #
-  # Beginning
-  # ======
-  # parent (id: 0) -> target (id: 1)
-  #
-  # Create dummy container
-  # ======
-  # parent (id: 0) -> target (id: 1) -> dummy (id: 2)
-  #
-  # Create lora node with input ids = [0, 2]
-  # ======
-  # parent (id: 0) -> target (id: 1) -> dummy (id: 2) -> lora (id: 3)
-  #                ------------------------------------> lora (id: 3)
-  #
-  # target takes dummy's id, throw away dummy
-  # =====
-  # parent (id: 0) ->          target (id: 2)         -> lora (id: 3)
-  #                ------------------------------------> lora (id: 3)
-  #
-  # lora takes target's original id
-  # =====
-  # parent (id: 0) ->          target (id: 2)          -> lora (id: 1)
-  #                -------------------------------------> lora (id: 1)
-  #
-  # lora and target have now been swapped
-  # any downstream node whose input was 1, will now take the lora values
+  `target_key`, `target_query`, `target_value` are required if `target_node_fn` isn't specified
+
+  ## Examples
+  ```
+  lora_model =
+    model
+    |> Axon.freeze()
+    |> Lorax.inject(%Lorax.Config{
+      r: 2,
+      alpha: 4,
+      dropout: 0.05,
+      target_key: true,
+      target_query: true,
+      target_value: true
+    })
+  ```
+
+  ## Targeting nodes manually
+  ```
+  lora_model =
+    model
+    |> Axon.freeze()
+    |> Lorax.inject(%Lorax.Config{
+      r: 2,
+      alpha: 4,
+      dropout: 0.05,
+      target_node_fn: fn %Axon.Node{name: name_fn} ->
+        # names are generated lazily, and look like "decoder.blocks.11.self_attention.value"
+        # have to invoke the function to see what layer the node represents
+        # https://github.com/elixir-nx/axon/blob/v0.6.0/lib/axon.ex#L3923
+        name = name_fn.(nil, nil)
+        shortname = String.split(name, ".") |> List.last()
+
+        if shortname == "output" do
+          true
+        else
+          false
+        end
+      end
+    })
+  ```
+  """
   def inject(%Axon{} = axon, %Config{} = config) do
     target_nodes = get_target_nodes(axon, config)
 
@@ -100,7 +210,7 @@ defmodule Lorax do
     end)
   end
 
-  defn lora_impl(x, wx, lora_A, lora_B, opts \\ []) do
+  defnp lora_impl(x, wx, lora_A, lora_B, opts \\ []) do
     dropout = opts[:dropout]
     scaling = opts[:scaling]
 

@@ -1,6 +1,6 @@
 <!-- livebook:{"persist_outputs":true} -->
 
-# Running GPT2 with LoRA parameters
+# Running LLMs with LoRA
 
 ```elixir
 Mix.install([
