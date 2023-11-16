@@ -1,6 +1,6 @@
 # Lorax
 
-This package implements Low-Rank Adaptation (LoRA), a popular method for fine-tuning large language models.
+This package implements [Low-Rank Adaptation (LoRA)](https://arxiv.org/abs/2106.09685), a popular method for fine-tuning large language models.
 
 ![lora diagram](https://raw.githubusercontent.com/spawnfest/lorax/main/diagram.png)
 
@@ -12,13 +12,11 @@ This package can be installed by adding `lorax` to your list of dependencies in 
 def deps do
   [
     {:lorax, "~> 0.1.0"}
-    # or
-    {:lorax, git: "https://github.com/wtedw/lorax.git"},
   ]
 end
 ```
 
-## How To Fine-tune an LLM
+## Fine-tuning an LLM with LoRA
 
 In general,
 
@@ -53,36 +51,35 @@ lora_params = lora_merged_params
   |> Lorax.Params.kino_download()
 ```
 
+In practice, every model has some unique architecture that you need to account for.
 For more detailed guides, see
 
-1. [Training LoRAs](finetuning_gpt_with_lora.livemd)
-1. [Running LoRAs](running_gpt_with_lora.livemd)
+1. [Finetuning LLMs with LoRA](finetuning_gpt_with_lora.livemd)
+2. [Running LLMs with LoRA](running_gpt_with_lora.livemd)
 
 ## Default Settings
 
-The default configs applies LoRA to all query and value matrices.
-r is set to 1, alpha to 2.
+The default config applies LoRA to all query and value matrices. r = 1, alpha = 2.
 
-The original LoRA paper found that configuring only query and value matrices was effective enough for fine-tuning. But in practice, r values of 2, 4, or 8 have more expressive capabilities.
+The LoRA paper showed that adapting just the query and value matrices with r = 1 was enough to achieve good fine-tuning results. However, in practice, people pick much higher r values and sometimes target all linear layers. 
 
 ## Recommended Settings
-
-These settings are for an A10 small w/ 24gb vRAM
+These are the settings I use for fine-tuning smaller LLMs 
 
 ```
 Lora Config
 - r value  = at least 2
 - alpha value = r * 2
-- batch size = 4
-- sequence_length = 512
 
 Training
-- learning_rate of 3.0e-4
+- learning_rate of 3.0e-4 with adam optimizer
 
 Text Generation
 - multinomial sampling
 - p = 0.06 or 0.08 for more variety (or if you experience repetitive results)
 ```
+
+For more details on configuring LoRA hyperparameters, see this [post](https://lightning.ai/pages/community/lora-insights/) by Sebastian Raschka.
 
 ## Limitations
 

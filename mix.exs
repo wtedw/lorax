@@ -11,8 +11,8 @@ defmodule Lorax.MixProject do
       docs: [
         extras: [
           "README.md",
-          "guides/running_gpt_with_lora.livemd",
           "guides/finetuning_gpt_with_lora.livemd",
+          "guides/running_gpt_with_lora.livemd",
         ],
         main: "readme",
         before_closing_body_tag: fn

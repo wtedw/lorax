@@ -20,12 +20,12 @@ defmodule Lorax do
   ```
 
   For more detailed guides, see
-  1. [Training LoRAs](finetuning_gpt_with_lora.livemd)
-  1. [Running LoRAs](running_gpt_with_lora.livemd)
+  1. [Finetuning LLMs with LoRA](finetuning_gpt_with_lora.livemd)
+  2. [Running LLMs with LoRA](running_gpt_with_lora.livemd)
 
 
   LoRA layers are implemented by injecting new nodes into the Axon struct.
-  These nodes represent the B and A matrices. Each node takes an input `x` and computes `BAx`.
+  These LoRA nodes represent the B and A matrices. Each node takes an input `x` and computes `BAx`.
   Furthermore, the LoRA node will receive `Wx` as an input and compute `Wx + BAx`.
   This isn't the standard implementation, but it simplifies the injection process.
 
