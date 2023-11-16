@@ -23,7 +23,7 @@ defmodule Lorax.Params do
   Creates a Kino widget for uploading serialized params file.
   Must be placed in the last line of a Livebook cell.
   """
-  def kino_file_load!(%Kino.Input{} = kino_input) do
+  def kino_file_load!(kino_input) do
     value = Kino.Input.read(kino_input)
 
     case value do

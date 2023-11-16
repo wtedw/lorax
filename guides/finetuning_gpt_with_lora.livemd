@@ -9,7 +9,6 @@ Mix.install([
   {:nx, "~> 0.6.1"},
   {:exla, "~> 0.6.1"},
   {:lorax, git: "https://github.com/wtedw/lorax.git"},
-  # {:lorax, path: "/Users/ted/CS/elixir/lorax", override: true},
   {:req, "~> 0.4.0"},
   {:kino, "~> 0.11.0"}
 ])

@@ -54,7 +54,7 @@ defmodule PhoenixDemo.SampleLive do
     {:ok,
      socket
      |> assign(
-       text: "<title>Elixir 5 released</title>",
+       text: "<title>Elixir 2.0 is out!</title>",
        current_id: nil,
        current_content: "",
        current_likes: "",
@@ -270,7 +270,7 @@ lora_model_info = %{model: lora_model, params: merged_params, spec: spec}
 
 lora_generation_config =
   Bumblebee.configure(generation_config,
-    max_new_tokens: 512,
+    max_new_tokens: 205,
     strategy: %{type: :multinomial_sampling, top_p: 0.70}
   )
 
