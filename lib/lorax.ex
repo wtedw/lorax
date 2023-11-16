@@ -1,6 +1,6 @@
 defmodule Lorax do
   @moduledoc """
-  Experimental Low-Rank Adaptation (LoRA) implementation
+  Simple Low-Rank Adaptation (LoRA) implementation
 
   ## LoRA model creation
   To create a LoRA model, freeze an existing model and inject LoRA layers using `Lorax.inject/2`.
@@ -91,18 +91,24 @@ defmodule Lorax do
 
     `dropout` specifies the dropout rate applied to the low-rank matrices.
 
-    `target_query` specifies whether to apply LoRA to all key nodes in an
+    `dropout_seed` determines the seed used for `Nx.Random.key/1` during
+    dropout application. When defined, it ensures that the LoRA adapter
+    produces consistent tensor values, assuming that other layers also have
+    deterministic outputs.
+
+    `target_query` specifies whether to apply LoRA to all query matrices in an
     attention block. Defaults to true.
 
-    `target_value` specifies whether to apply LoRA to all value nodes in an
+    `target_value` specifies whether to apply LoRA to all value matrices in an
     attention block. Defaults to false.
 
-    `target_key` specifies whether to apply LoRA to all value nodes in an
+    `target_key` specifies whether to apply LoRA to all key matrices in an
     attention block. Defaults to true.
     """
     defstruct r: 1,
               alpha: 2,
               dropout: 0.0,
+              dropout_seed: nil,
               target_query: true,
               target_key: false,
               target_value: true,
@@ -192,15 +198,18 @@ defmodule Lorax do
   defp create_lora_node(parent_axons, dummy_axon, %Config{
          r: r,
          alpha: alpha,
-         dropout: dropout
+         dropout: dropout,
+         dropout_seed: dropout_seed,
        }) do
     scaling = alpha / r
+    dropout_seed = dropout_seed || :erlang.system_time()
     lora_A = Axon.param("lora_a", &dense_kernel_a(&1, &2, r), initializer: :normal)
     lora_B = Axon.param("lora_b", &dense_kernel_b(&1, &2, r), initializer: :zeros)
 
     Axon.layer(&lora_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
       op_name: :lora,
       dropout: dropout,
+      dropout_seed: dropout_seed,
       scaling: scaling
     )
     |> then(fn %Axon{output: lora_id, nodes: lora_nodes} ->
@@ -211,9 +220,10 @@ defmodule Lorax do
 
   defnp lora_impl(x, wx, lora_A, lora_B, opts \\ []) do
     dropout = opts[:dropout]
+    dropout_seed = opts[:dropout_seed]
     scaling = opts[:scaling]
 
-    x = Axon.Layers.dropout(x, Nx.Random.key(1337), rate: dropout)
+    x = Axon.Layers.dropout(x, Nx.Random.key(dropout_seed), rate: dropout)
     after_a = Axon.Layers.dense(x, lora_A |> Nx.transpose())
     after_b = Nx.dot(after_a, lora_B |> Nx.transpose())
     bax = Nx.multiply(after_b, scaling)

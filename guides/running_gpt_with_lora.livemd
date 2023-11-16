@@ -92,9 +92,7 @@ See the code below for examples
 # Method 1: URL downlaod 
 lora_serialized =
   Req.get!("https://raw.githubusercontent.com/wtedw/lorax/main/params/elixir-chat-r4a8.lorax").body
-
 lora_only_params = Nx.deserialize(lora_serialized)
-
 lora_only_params |> Map.keys()
 
 # Method 2: File download
@@ -184,7 +182,7 @@ I remember seeing on the Elixir subreddit [...]
 <likes>3 likes</likes>
 ```
 
-You can simulate a thread by kickstarting the text generation with some `<thread>title</title>` string, and the LLM will give a prediction of what the general Elixir community will say.
+You can simulate a thread by kickstarting the text generation with some `<title>text</title>` string, and the LLM will give a prediction of what the general Elixir community will say.
 
 ```elixir
 Nx.Serving.batched_run(

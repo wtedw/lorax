@@ -2,8 +2,6 @@
 
 This package implements [Low-Rank Adaptation (LoRA)](https://arxiv.org/abs/2106.09685), a popular method for fine-tuning large language models.
 
-![lora diagram](https://raw.githubusercontent.com/spawnfest/lorax/main/diagram.png)
-
 ## Installation
 
 This package can be installed by adding `lorax` to your list of dependencies in `mix.exs`:
@@ -61,10 +59,10 @@ For more detailed guides, see
 
 The default config applies LoRA to all query and value matrices. r = 1, alpha = 2.
 
-The LoRA paper showed that adapting just the query and value matrices with r = 1 was enough to achieve good fine-tuning results. However, in practice, people pick much higher r values and sometimes target all linear layers. 
+The LoRA paper demonstrated that adapting only the query and value matrices with r = 1 achieved effective fine-tuning results. However, for larger language models, people often choose much higher values of r and sometimes target all linear layers.
 
 ## Recommended Settings
-These are the settings I use for fine-tuning smaller LLMs 
+These settings works well for fine-tuning smaller LLMs (~1b param models) 
 
 ```
 Lora Config
@@ -72,7 +70,7 @@ Lora Config
 - alpha value = r * 2
 
 Training
-- learning_rate of 3.0e-4 with adam optimizer
+- learning_rate of 3.0e-4 with an adam optimizer
 
 Text Generation
 - multinomial sampling
@@ -83,6 +81,6 @@ For more details on configuring LoRA hyperparameters, see this [post](https://li
 
 ## Limitations
 
-While the LoRA algorithm significantly reduces the GPU requirements for fine-tuning a model, using LoRA on LLMs that are bigger than GPT2 still requires a GPU with high vRAM.
+While LoRA significantly reduces the GPU requirements for fine-tuning, using LoRA on LLMs that are bigger than GPT2 still requires a GPU with high vRAM.
 
 Most of the examples here were fine-tuned on an Nvidia T4 / A10G on Huggingface Spaces. Attempting to fine-tune Mistral 7B on Huggingface's A10x4 (the largest available w/ 96 vRAM) will cause cuda OOM errors. Further work needs to be done to reduce the memory usage on GPUs (like implementing QLoRA).
