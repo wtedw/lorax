@@ -4,20 +4,35 @@ This package implements Low-Rank Adaptation (LoRA), a popular method for fine-tu
 
 ![lora diagram](https://raw.githubusercontent.com/spawnfest/lorax/main/diagram.png)
 
+## Installation
+
+This package can be installed by adding `lorax` to your list of dependencies in `mix.exs`:
+
+```elixir
+def deps do
+  [
+    {:lorax, "~> 0.1.0"}
+    # or
+    {:lorax, git: "https://github.com/wtedw/lorax.git"},
+  ]
+end
+```
+
 ## How To Fine-tune an LLM
 
-View the notebooks directory to see an example of how to fine-tune, and perform text generation using LoRA adapters.
-
 In general,
+
 1. Import your model
-2. Freeze your model
-3. Inject trainable LoRA parameters
+2. Inject trainable LoRA parameters
+3. Train LoRA model
+4. Download LoRA only params
 
 ```
-{:ok, model} = Bumblebee.load_model({:hf, "gpt2"})
+{:ok, model_info} = Bumblebee.load_model({:hf, "gpt2"})
+%{model: gpt2_model, params: gpt2_params} = model_info
 
 lora_model =
-  model
+  gpt2_model
   |> Axon.freeze()
   |> Lorax.inject(%Lorax.Config{
       r: 2,
@@ -28,15 +43,27 @@ lora_model =
       target_value: true
   })
 
-# train model
+lora_merged_params =
+  Axon.build(lora_model, mode: :train)
+  |> Axon.Loop.trainer(custom_loss_fn, Polaris.Optimizers.adam(learning_rate: 3.0e-4))
+  |> Axon.Loop.run(train_batch_stream, gpt2_params, epochs: 3, iterations: 1000, compiler: EXLA)
+
+lora_params = lora_merged_params
+  |> Lorax.Params.filter(gpt2_params)
+  |> Lorax.Params.kino_download()
 ```
+
+For more detailed guides, see
+
+1. [Training LoRAs](finetuning_gpt_with_lora.livemd)
+1. [Running LoRAs](running_gpt_with_lora.livemd)
 
 ## Default Settings
 
-The default configs target only the query and value matrices.
+The default configs applies LoRA to all query and value matrices.
 r is set to 1, alpha to 2.
 
-The original LoRA paper found that configuring query and value matrices was effective enough for fine-tuning. Furthermore, even an r value of 1 is enough to fine-tune a model. Though in practice I found that it's necessary to use r values of 2, 4, or 8.
+The original LoRA paper found that configuring only query and value matrices was effective enough for fine-tuning. But in practice, r values of 2, 4, or 8 have more expressive capabilities.
 
 ## Recommended Settings
 
@@ -44,8 +71,8 @@ These settings are for an A10 small w/ 24gb vRAM
 
 ```
 Lora Config
-- r value of at least 2
-- alpha value is r*2
+- r value  = at least 2
+- alpha value = r * 2
 - batch size = 4
 - sequence_length = 512
 
@@ -59,23 +86,6 @@ Text Generation
 
 ## Limitations
 
-While the LoRA algorithm significantly reduces the GPU requirements for fine-tuning a model, using LoRA on LLMs that are bigger than GPT2 still requires a GPU with high vRAM. Most of the examples here were fine-tuned on an A10G on Huggingface Spaces. Attempting to fine-tune Mistral 7B on Huggingface's A10x4 (the largest available w/ 96 vRAM) will cause cuda OOM errors. To fine-tune on consumer GPUs, [quantization work](https://github.com/elixir-nx/axon/issues/100) needs to be done to implement the QLoRA algorithm.
+While the LoRA algorithm significantly reduces the GPU requirements for fine-tuning a model, using LoRA on LLMs that are bigger than GPT2 still requires a GPU with high vRAM.
 
-## Installation
-
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `lorax` to your list of dependencies in `mix.exs`:
-
-```elixir
-def deps do
-  [
-    {:lorax, "~> 0.1.0"}
-    # or
-    {:lorax, git: "https://github.com/spawnfest/lorax.git"},
-  ]
-end
-```
-
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/lorax>.
+Most of the examples here were fine-tuned on an A10G on Huggingface Spaces. Attempting to fine-tune Mistral 7B on Huggingface's A10x4 (the largest available w/ 96 vRAM) will cause cuda OOM errors. To fine-tune on consumer GPUs, [quantization work](https://github.com/elixir-nx/axon/issues/100) needs to be done to implement the QLoRA algorithm.

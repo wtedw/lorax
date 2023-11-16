@@ -20,7 +20,7 @@ defmodule Lorax do
   ```
 
   For more detailed guides, see
-  1. [Training LoRAs](training_gpt_with_lora.livemd)
+  1. [Training LoRAs](finetuning_gpt_with_lora.livemd)
   1. [Running LoRAs](running_gpt_with_lora.livemd)
 
 
@@ -198,7 +198,6 @@ defmodule Lorax do
     lora_A = Axon.param("lora_a", &dense_kernel_a(&1, &2, r), initializer: :normal)
     lora_B = Axon.param("lora_b", &dense_kernel_b(&1, &2, r), initializer: :zeros)
 
-    # Send x, dummy Wx, and new params to create a new lora layer node
     Axon.layer(&lora_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
       op_name: :lora,
       dropout: dropout,

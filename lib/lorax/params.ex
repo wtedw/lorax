@@ -20,7 +20,7 @@ defmodule Lorax.Params do
   end
 
   @doc """
-  Creates Kino cell for uploading serialized params file
+  Creates a Kino widget for uploading serialized params file.
   Must be placed in the last line of a Livebook cell.
   """
   def kino_file_load!(%Kino.Input{} = kino_input) do
@@ -42,8 +42,8 @@ defmodule Lorax.Params do
   end
 
   @doc """
-  Creates Kino cell for downloading params map.
-  Must be placed in the last line of a Livebook cell
+  Creates a Kino widget for downloading params map.
+  Must be placed in the last line of a Livebook cell.
   """
   def kino_download(
         params,
@@ -61,7 +61,7 @@ defmodule Lorax.Params do
   end
 
   @doc """
-  Calculates total bytes of the tensors inside a parameter map
+  Calculates total bytes of all the tensors inside a parameter map
   """
   def size(%{} = params) do
     Enum.reduce(params, 0, fn {_k, v}, param_size ->

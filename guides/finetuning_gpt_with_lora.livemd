@@ -1,6 +1,6 @@
 <!-- livebook:{"persist_outputs":true} -->
 
-# Training LoRA models
+# Finetuning LLMs with LoRA
 
 ```elixir
 Mix.install([
@@ -65,6 +65,18 @@ lora_dropout = 0.05
 ```
 
 ## Prepare a dataset
+
+We'll be using some data scraped from Elixirforum.
+It's structured like this.
+
+```
+<title>Ideas for an Open Source Discord</title>
+
+<author>WildYorkies</author>
+
+I remember seeing on the Elixir ...
+<likes>3 likes</likes>
+```
 
 ```elixir
 text =
@@ -375,7 +387,7 @@ Kino.start_child({Nx.Serving, name: Llama, serving: serving})
 {:ok, #PID<0.1392.0>}
 ```
 
-We'll kickstart the text generation using some `<title>text</title>` string. This is how the training data is formatted and will trigger the LoRA nodes to activate. With only 300 iterations, the model has already learned how to output text similar to our training data
+We'll kickstart the text generation using some `<title>text</title>` string. This is how the training data is formatted and will trigger the LoRA neurons to activate. With only 300 iterations, the model has already learned how to output text similar to our training data
 
 ```elixir
 Nx.Serving.batched_run(Llama, "<title>Elixir 2.0 released") |> Enum.each(&IO.write/1)
