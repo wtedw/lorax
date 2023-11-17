@@ -1,5 +1,8 @@
 # Lorax
 
+[![Module Version](https://img.shields.io/hexpm/v/lorax.svg)](https://hex.pm/packages/lorax)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/lorax/)
+
 This package implements [Low-Rank Adaptation (LoRA)](https://arxiv.org/abs/2106.09685), a popular method for fine-tuning large language models.
 
 ## Installation
