@@ -81,6 +81,9 @@ For more details on configuring LoRA hyperparameters, see this [post](https://li
 
 ## Limitations
 
-While LoRA significantly reduces the GPU requirements for fine-tuning, using LoRA on LLMs that are bigger than GPT2 still requires a GPU with high vRAM.
+1. GPU Memory Requirements: Although LoRA reduces the GPU requirements for fine-tuning, larger LLMs beyond GPT2 still demand GPUs with substantial vRAM. Inadequate memory management can lead to cuda OOM crashes.
 
-Most of the examples here were fine-tuned on an Nvidia T4 / A10G on Huggingface Spaces. Attempting to fine-tune Mistral 7B on Huggingface's A10x4 (the largest available w/ 96 vRAM) will cause cuda OOM errors. Further work needs to be done to reduce the memory usage on GPUs (like implementing QLoRA).
+2. Fine-Tuning Speed: The training speed of this library isn't on par with Huggingface's PEFT library. Further optimizations can be done to close the gap. 
+
+Note: For minor fine-tuning tasks without a GPU, the BinaryBackend is a viable option, often resulting in smoother training runs. Future updates will focus on minimizing GPU memory usage by reducing the amount of tensors stored during training, and potentially a QLoRA implementation one day.
+
