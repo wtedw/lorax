@@ -13,8 +13,8 @@ defmodule Lorax do
       r: 2,
       alpha: 4,
       dropout: 0.05,
-      target_key: true,
-      target_query: true,
+      target_key: false,
+      target_query: false,
       target_value: true
     })
   ```
@@ -96,11 +96,14 @@ defmodule Lorax do
     produces consistent tensor values, assuming that other layers also have
     deterministic outputs.
 
+    `param_type` specifies the numerical representation for the A and B
+    matrices. Defaults to float32
+
     `target_query` specifies whether to apply LoRA to all query matrices in an
     attention block. Defaults to true.
 
     `target_value` specifies whether to apply LoRA to all value matrices in an
-    attention block. Defaults to false.
+    attention block. Defaults to true.
 
     `target_key` specifies whether to apply LoRA to all key matrices in an
     attention block. Defaults to true.
@@ -109,8 +112,9 @@ defmodule Lorax do
               alpha: 2,
               dropout: 0.0,
               dropout_seed: nil,
+              param_type: {:f, 32},
               target_query: true,
-              target_key: false,
+              target_key: true,
               target_value: true,
               target_node_fn: nil
   end
@@ -200,11 +204,22 @@ defmodule Lorax do
          alpha: alpha,
          dropout: dropout,
          dropout_seed: dropout_seed,
+         param_type: param_type
        }) do
     scaling = alpha / r
     dropout_seed = dropout_seed || :erlang.system_time()
-    lora_A = Axon.param("lora_a", &dense_kernel_a(&1, &2, r), initializer: :normal)
-    lora_B = Axon.param("lora_b", &dense_kernel_b(&1, &2, r), initializer: :zeros)
+
+    lora_A =
+      Axon.param("lora_a", &dense_kernel_a(&1, &2, r),
+        initializer: :normal,
+        type: param_type
+      )
+
+    lora_B =
+      Axon.param("lora_b", &dense_kernel_b(&1, &2, r),
+        initializer: :zeros,
+        type: param_type
+      )
 
     Axon.layer(&lora_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
       op_name: :lora,
