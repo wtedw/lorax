@@ -36,10 +36,7 @@ lora_model =
   |> Lorax.inject(%Lorax.Config{
       r: 2,
       alpha: 4,
-      dropout: 0.05,
-      target_query: true,
-      target_key: true,
-      target_value: true
+      dropout: 0.05
   })
 
 lora_merged_params =
@@ -60,12 +57,13 @@ For more detailed guides, see
 
 ## Default Settings
 
-The default config applies LoRA to all query and value matrices. r = 1, alpha = 2.
+The default config applies LoRA to all query, key, value matrices. r = 1, alpha = 2.
 
 The LoRA paper demonstrated that adapting only the query and value matrices with r = 1 achieved effective fine-tuning results. However, for larger language models, people often choose much higher values of r and sometimes target all linear layers.
 
 ## Recommended Settings
-These settings works well for fine-tuning smaller LLMs (~1b param models) 
+
+These settings works well for fine-tuning smaller LLMs (~1b param models)
 
 ```
 Lora Config
@@ -86,7 +84,6 @@ For more details on configuring LoRA hyperparameters, see this [post](https://li
 
 1. GPU Memory Requirements: Although LoRA reduces the GPU requirements for fine-tuning, larger LLMs beyond GPT2 still demand GPUs with substantial vRAM. Inadequate memory management can lead to cuda OOM crashes.
 
-2. Fine-Tuning Speed: The training speed of this library isn't on par with Huggingface's PEFT library. Further optimizations can be done to close the gap. 
+2. Fine-Tuning Speed: The training speed of this library isn't on par with Huggingface's PEFT library. Further optimizations can be done to close the gap.
 
 Note: For minor fine-tuning tasks without a GPU, the BinaryBackend is a viable option, often resulting in smoother training runs. Future updates will focus on minimizing GPU memory usage by reducing the amount of tensors stored during training, and potentially a QLoRA implementation one day.
-
