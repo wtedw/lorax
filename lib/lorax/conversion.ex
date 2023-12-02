@@ -20,7 +20,8 @@ defmodule Lorax.Conversion do
 
     config = %Lorax.Config{
       r: calc_r(params),
-      alpha: calc_alpha(params)
+      alpha: calc_alpha(params),
+      param_type: calc_param_type(params)
     }
 
     config
@@ -54,5 +55,15 @@ defmodule Lorax.Conversion do
     else
       {:error, "Lorax does not support multiple alphas"}
     end
+  end
+
+  defp calc_param_type(params) do
+    lora_keys =
+      params
+      |> Map.keys()
+      |> Enum.filter(fn key -> String.contains?(key, "lora_down") end)
+
+    random_tensor = params[List.first(lora_keys)]
+    Nx.type(random_tensor)
   end
 end

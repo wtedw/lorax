@@ -113,7 +113,6 @@ defmodule Lorax do
               dropout: 0.0,
               dropout_seed: nil,
               param_type: {:f, 32},
-              node_name_fn: nil,
               target_query: true,
               target_key: true,
               target_value: true,
@@ -224,14 +223,9 @@ defmodule Lorax do
         type: param_type
       )
 
-    name_fn = fn (op, op_count) ->
+    name_fn = fn op, op_count ->
       target_name = target_name_fn.(op, op_count)
-      IO.inspect(op, label: "what is op?")
-      IO.inspect(op_count, label: "what is op count?")
-
-      IO.inspect(target_name, label: "parent name")
-      lora_name = "lora_" <> target_name
-      |> IO.inspect(label: "lora name")
+      "lora_" <> target_name
     end
 
     Axon.layer(&lora_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
