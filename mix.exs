@@ -27,7 +27,8 @@ defmodule Lorax.MixProject do
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:axon, "~> 0.6.0"},
       {:nx, "~> 0.6.0"},
-      {:kino, "~> 0.11.0"}
+      {:kino, "~> 0.11.0"},
+      {:safetensors, "~> 0.1.2"}
     ]
   end
 

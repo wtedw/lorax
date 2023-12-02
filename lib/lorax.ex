@@ -113,6 +113,7 @@ defmodule Lorax do
               dropout: 0.0,
               dropout_seed: nil,
               param_type: {:f, 32},
+              node_name_fn: nil,
               target_query: true,
               target_key: true,
               target_value: true,
@@ -183,7 +184,7 @@ defmodule Lorax do
 
       # lora node takes target's place
       # target node takes dummy's place
-      lora_node = create_lora_node(parent_axons, dummy_axon, config)
+      lora_node = create_lora_node(parent_axons, dummy_axon, target_node.name, config)
       lora_node = %Axon.Node{lora_node | id: target_id}
       target_node = %Axon.Node{target_node | id: dummy_id}
 
@@ -199,7 +200,9 @@ defmodule Lorax do
     end)
   end
 
-  defp create_lora_node(parent_axons, dummy_axon, %Config{
+  # Parent + dummy axon are inputs to create the lora node
+  # target_node_name_fn is provided to help create a name for our new lora node
+  defp create_lora_node(parent_axons, dummy_axon, target_name_fn, %Config{
          r: r,
          alpha: alpha,
          dropout: dropout,
@@ -221,8 +224,19 @@ defmodule Lorax do
         type: param_type
       )
 
+    name_fn = fn (op, op_count) ->
+      target_name = target_name_fn.(op, op_count)
+      IO.inspect(op, label: "what is op?")
+      IO.inspect(op_count, label: "what is op count?")
+
+      IO.inspect(target_name, label: "parent name")
+      lora_name = "lora_" <> target_name
+      |> IO.inspect(label: "lora name")
+    end
+
     Axon.layer(&lora_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
       op_name: :lora,
+      name: name_fn,
       dropout: dropout,
       dropout_seed: dropout_seed,
       scaling: scaling
@@ -274,15 +288,19 @@ defmodule Lorax do
          }
        ) do
     Axon.reduce_nodes(axon, [], fn
-      %Axon.Node{id: id, name: name_fn, op: :dense}, acc ->
+      %Axon.Node{id: id, name: name_fn, op: :dense, op_name: op_name}, acc ->
         shortname =
           name_fn.(:dense, nil)
           |> String.split(".")
           |> List.last()
 
+        IO.inspect(shortname, label: "shortname")
+        IO.inspect(op_name, label: "op name")
+
         if (target_key and shortname == "key") or
              (target_query and shortname == "query") or
              (target_value and shortname == "value") do
+          IO.inspect("here")
           [id | acc]
         else
           acc
