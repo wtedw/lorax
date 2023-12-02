@@ -183,7 +183,7 @@ defmodule Lorax do
 
       # lora node takes target's place
       # target node takes dummy's place
-      lora_node = create_lora_node(parent_axons, dummy_axon, config)
+      lora_node = create_lora_node(target_node, parent_axons, dummy_axon, config)
       lora_node = %Axon.Node{lora_node | id: target_id}
       target_node = %Axon.Node{target_node | id: dummy_id}
 
@@ -199,30 +199,67 @@ defmodule Lorax do
     end)
   end
 
-  defp create_lora_node(parent_axons, dummy_axon, %Config{
-         r: r,
-         alpha: alpha,
-         dropout: dropout,
-         dropout_seed: dropout_seed,
-         param_type: param_type
-       }) do
+  defp create_lora_node(
+         %Axon.Node{op: :conv, name: target_name_fn, opts: opts, parameters: parameters},
+         parent_axons,
+         dummy_axon,
+         %Config{
+           r: r,
+           alpha: alpha,
+           dropout: dropout,
+           dropout_seed: dropout_seed,
+           param_type: param_type
+         }
+       ) do
     scaling = alpha / r
     dropout_seed = dropout_seed || :erlang.system_time()
 
-    lora_A =
-      Axon.param("lora_a", &dense_kernel_a(&1, &2, r),
-        initializer: :normal,
-        type: param_type
-      )
+    {a_shape, b_shape} = Lorax.Shape.calc_ab(:conv, r, parameters)
 
-    lora_B =
-      Axon.param("lora_b", &dense_kernel_b(&1, &2, r),
-        initializer: :zeros,
-        type: param_type
-      )
+    lora_A = Axon.param("lora_down", a_shape, initializer: :normal, type: param_type)
+    lora_B = Axon.param("lora_up", b_shape, initializer: :zeros, type: param_type)
+    lora_name_fn = create_name_fn(target_name_fn)
+
+    Axon.layer(&lora_conv_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
+      op_name: :lora,
+      name: lora_name_fn,
+      dropout: dropout,
+      dropout_seed: dropout_seed,
+      layer_opts: opts,
+      scaling: scaling
+    )
+    |> then(fn %Axon{output: lora_id, nodes: lora_nodes} ->
+      # Extract out the node, throwaway the Axon container
+      %Axon.Node{} = lora_nodes[lora_id]
+    end)
+  end
+
+  # Parent + dummy axon are inputs to create the lora node
+  # target_node_name_fn is provided to help create a name for our new lora node
+  defp create_lora_node(
+         %Axon.Node{op: :dense, name: target_name_fn, parameters: parameters},
+         parent_axons,
+         dummy_axon,
+         %Config{
+           r: r,
+           alpha: alpha,
+           dropout: dropout,
+           dropout_seed: dropout_seed,
+           param_type: param_type
+         }
+       ) do
+    scaling = alpha / r
+    dropout_seed = dropout_seed || :erlang.system_time()
+
+    {a_shape, b_shape} = Lorax.Shape.calc_ab(:dense, r, parameters)
+
+    lora_A = Axon.param("lora_down", a_shape, initializer: :normal, type: param_type)
+    lora_B = Axon.param("lora_up", b_shape, initializer: :zeros, type: param_type)
+    lora_name_fn = create_name_fn(target_name_fn)
 
     Axon.layer(&lora_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
       op_name: :lora,
+      name: lora_name_fn,
       dropout: dropout,
       dropout_seed: dropout_seed,
       scaling: scaling
@@ -231,6 +268,16 @@ defmodule Lorax do
       # Extract out the node, throwaway the Axon container
       %Axon.Node{} = lora_nodes[lora_id]
     end)
+  end
+
+  defnp lora_conv_impl(x, wx, lora_A, lora_B, opts \\ []) do
+    scaling = opts[:scaling]
+    layer_opts = opts[:layer_opts]
+
+    after_a = Axon.Layers.conv(x, lora_A, layer_opts)
+    after_b = Axon.Layers.conv(after_a, lora_B)
+    bax = Nx.multiply(after_b, scaling)
+    Nx.add(wx, bax)
   end
 
   defnp lora_impl(x, wx, lora_A, lora_B, opts \\ []) do
@@ -246,12 +293,12 @@ defmodule Lorax do
     Nx.add(wx, bax)
   end
 
-  defp dense_kernel_a(x_shape, _wx_shape, r) do
-    {r, elem(x_shape, Nx.rank(x_shape) - 1)}
-  end
+  defp create_name_fn(target_name_fn) do
+    fn op, op_count ->
+      target_name = target_name_fn.(op, op_count)
 
-  defp dense_kernel_b(_x_shape, wx_shape, r) do
-    {elem(wx_shape, Nx.rank(wx_shape) - 1), r}
+      "lora_" <> target_name
+    end
   end
 
   defp get_target_nodes(axon, %Config{target_node_fn: target_node_fn})
@@ -265,6 +312,7 @@ defmodule Lorax do
     end)
   end
 
+  # note: This is just for LLMs
   defp get_target_nodes(
          axon,
          %Config{
