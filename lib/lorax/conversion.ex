@@ -27,23 +27,14 @@ defmodule Lorax.Conversion do
   end
 
   defp calc_r(params) do
-    lora_down_keys =
+    lora_ranks =
       params
       |> Map.keys()
       |> Enum.filter(fn x -> String.contains?(x, "lora_down") end)
+      |> Enum.map(fn k -> params[k] |> Nx.shape() |> elem(0) end)
+      |> Enum.uniq()
 
-    first_dimensions =
-      Enum.map(lora_down_keys, fn k ->
-        params[k]
-        |> Nx.shape()
-        |> elem(0)
-      end)
-
-    lora_ranks = Enum.uniq(first_dimensions)
-
-    are_ranks_same = length(lora_ranks) == 1
-
-    if are_ranks_same do
+    if length(lora_ranks) == 1 do
       List.first(lora_ranks)
     else
       {:error, "Lorax does not support multiple ranks at the moment"}
@@ -51,17 +42,15 @@ defmodule Lorax.Conversion do
   end
 
   defp calc_alpha(params) do
-    unique_alphas =
+    lora_alphas =
       params
       |> Map.keys()
       |> Enum.filter(fn key -> String.contains?(key, "alpha") end)
       |> Enum.map(fn key -> params[key] end)
       |> Enum.uniq()
 
-    all_same = unique_alphas |> length() == 1
-
-    if all_same do
-      List.first(unique_alphas)
+    if length(lora_alphas) == 1 do
+      lora_alphas |> List.first() |> Nx.to_number()
     else
       {:error, "Lorax does not support multiple alphas"}
     end
