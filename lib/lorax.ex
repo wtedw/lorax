@@ -226,6 +226,7 @@ defmodule Lorax do
     name_fn = fn op, op_count ->
       target_name = target_name_fn.(op, op_count)
       "lora_" <> target_name
+      |> IO.inspect()
     end
 
     Axon.layer(&lora_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],

@@ -5,19 +5,6 @@ defmodule Lorax.Conversion do
   def read(path) do
     params = Safetensors.read!(path)
 
-    #     - query, key, value
-    # - cross_attention.output
-    # - input_projection
-    # - output_projection
-    # - ffn.intermediate
-    # - ffn.output
-    # - conv_1
-    # - conv_2
-    # - shortcut.projection
-    # - downsamples.{m}.conv (just conv is fine)
-    # - upsamples.{m}.conv (just conv is fine)
-    # - timestep_projection
-
     config = %Lorax.Config{
       r: calc_r(params),
       alpha: calc_alpha(params),
@@ -25,7 +12,12 @@ defmodule Lorax.Conversion do
       target_node_fn: calc_target_node_fn(params)
     }
 
-    config
+    params =
+      Enum.map(params, fn {layer_name, tensor} ->
+        {translate_kohya_layer(layer_name), tensor}
+      end)
+
+    {config, params}
   end
 
   defp calc_r(params) do
@@ -49,6 +41,7 @@ defmodule Lorax.Conversion do
       |> Map.keys()
       |> Enum.filter(fn key -> String.contains?(key, "alpha") end)
       |> Enum.map(fn key -> params[key] end)
+      |> Enum.map(fn tensor -> Nx.to_number(tensor) end)
       |> Enum.uniq()
 
     if length(lora_alphas) == 1 do
@@ -68,25 +61,18 @@ defmodule Lorax.Conversion do
     Nx.type(random_tensor)
   end
 
-  defp calc_target_node_fn(params) do
-    # is_kohya_params =
-    #   params
-    #   |> Enum.map(fn {k, _} -> String.starts_with?(k, "lora_unet") end)
-    #   |> Enum.all?()
-
-    # IO.inspect(is_kohya_params, label: "iskohya?")
+  defp calc_target_node_fn(_params) do
     fn %Axon.Node{name: name_fn} ->
       split =
         name_fn.(nil, nil)
         |> String.split(".")
 
       shortname = split |> List.last()
-      # twoname = split[-2] <> "." <> split[-1]
 
       twoname =
         if length(split) >= 2 do
           [last, last2 | _rest] = Enum.reverse(split)
-          last <> "." <> last2
+          last2 <> "." <> last
         else
           nil
         end
@@ -115,12 +101,21 @@ defmodule Lorax.Conversion do
     end
   end
 
+  # defp is_kohya_params?(params) do
+  #   # is_kohya_params =
+  #   #   params
+  #   #   |> Enum.map(fn {k, _} -> String.starts_with?(k, "lora_unet") end)
+  #   #   |> Enum.all?()
+
+  #   # IO.inspect(is_kohya_params, label: "iskohya?")
+  # end
+
   defp translate_kohya_layer(layer_name) do
     layer_name
-    |> String.replace("lora_unet_down_blocks_", "down_blocks.")
-    |> String.replace("lora_unet_up_blocks_", "up_blocks.")
-    |> String.replace("lora_unet_mid_block_attentions_", "mid_block.transformers.")
-    |> String.replace("lora_unet_mid_block_resnets_", "mid_block.residual_blocks.")
+    |> String.replace("lora_unet_down_blocks_", "lora_down_blocks.")
+    |> String.replace("lora_unet_up_blocks_", "lora_up_blocks.")
+    |> String.replace("lora_unet_mid_block_attentions_", "lora_mid_block.transformers.")
+    |> String.replace("lora_unet_mid_block_resnets_", "lora_mid_block.residual_blocks.")
     |> String.replace("_attentions_", ".transformers.")
     |> String.replace("_transformer_blocks_", ".blocks.")
     |> String.replace("_downsamplers_", ".downsamples.")
