@@ -183,7 +183,7 @@ defmodule Lorax do
 
       # lora node takes target's place
       # target node takes dummy's place
-      lora_node = create_lora_node(parent_axons, dummy_axon, target_node.name, config)
+      lora_node = create_lora_node(target_node, parent_axons, dummy_axon, config)
       lora_node = %Axon.Node{lora_node | id: target_id}
       target_node = %Axon.Node{target_node | id: dummy_id}
 
@@ -199,15 +199,64 @@ defmodule Lorax do
     end)
   end
 
+  defp create_lora_node(
+         %Axon.Node{name: target_name_fn, op: :conv},
+         parent_axons,
+         dummy_axon,
+         %Config{
+           r: r,
+           alpha: alpha,
+           dropout: dropout,
+           dropout_seed: dropout_seed,
+           param_type: param_type
+         }
+       ) do
+    scaling = alpha / r
+    dropout_seed = dropout_seed || :erlang.system_time()
+
+    # todo
+    lora_A =
+      Axon.param("lora_a", &conv_kernel_a(&1, &2, r),
+        initializer: :normal,
+        type: param_type
+      )
+
+    # todo
+    lora_B =
+      Axon.param("lora_b", &conv_kernel_b(&1, &2, r),
+        initializer: :zeros,
+        type: param_type
+      )
+
+    lora_name_fn = create_name_fn(target_name_fn)
+
+    Axon.layer(&lora_conv_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
+      op_name: :lora,
+      name: lora_name_fn,
+      dropout: dropout,
+      dropout_seed: dropout_seed,
+      scaling: scaling
+    )
+    |> then(fn %Axon{output: lora_id, nodes: lora_nodes} ->
+      # Extract out the node, throwaway the Axon container
+      %Axon.Node{} = lora_nodes[lora_id]
+    end)
+  end
+
   # Parent + dummy axon are inputs to create the lora node
   # target_node_name_fn is provided to help create a name for our new lora node
-  defp create_lora_node(parent_axons, dummy_axon, target_name_fn, %Config{
-         r: r,
-         alpha: alpha,
-         dropout: dropout,
-         dropout_seed: dropout_seed,
-         param_type: param_type
-       }) do
+  defp create_lora_node(
+         %Axon.Node{name: target_name_fn, op: _target_op},
+         parent_axons,
+         dummy_axon,
+         %Config{
+           r: r,
+           alpha: alpha,
+           dropout: dropout,
+           dropout_seed: dropout_seed,
+           param_type: param_type
+         }
+       ) do
     scaling = alpha / r
     dropout_seed = dropout_seed || :erlang.system_time()
 
@@ -223,15 +272,11 @@ defmodule Lorax do
         type: param_type
       )
 
-    name_fn = fn op, op_count ->
-      target_name = target_name_fn.(op, op_count)
-      "lora_" <> target_name
-      |> IO.inspect()
-    end
+    lora_name_fn = create_name_fn(target_name_fn)
 
     Axon.layer(&lora_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
       op_name: :lora,
-      name: name_fn,
+      name: lora_name_fn,
       dropout: dropout,
       dropout_seed: dropout_seed,
       scaling: scaling
@@ -240,6 +285,17 @@ defmodule Lorax do
       # Extract out the node, throwaway the Axon container
       %Axon.Node{} = lora_nodes[lora_id]
     end)
+  end
+
+  defnp lora_conv_impl(x, wx, lora_A, lora_B, opts \\ []) do
+    scaling = opts[:scaling]
+
+    after_a = Axon.Layers.conv(x, lora_A)
+    after_b = Axon.Layers.conv(after_a, lora_B)
+    bax = Nx.multiply(after_b, scaling)
+    Nx.add(wx, bax)
+
+    # Apparently we can just fuse the kernels, so can just add the lora_A, lora_B
   end
 
   defnp lora_impl(x, wx, lora_A, lora_B, opts \\ []) do
@@ -255,11 +311,48 @@ defmodule Lorax do
     Nx.add(wx, bax)
   end
 
-  defp dense_kernel_a(x_shape, _wx_shape, r) do
+  defp create_name_fn(target_name_fn) do
+    fn op, op_count ->
+      target_name = target_name_fn.(op, op_count)
+
+      ("lora_" <> target_name)
+      |> IO.inspect(label: "lora node name")
+    end
+  end
+
+  # lora down
+  defp conv_kernel_a(x_shape, wx_shape, r) do
+    IO.inspect(x_shape, label: "conv_kernel_a x")
+    IO.inspect(wx_shape, label: "conv_kernel_a wx")
+
+    rank = Nx.rank(x_shape)
+    channels = x_shape |> elem(rank - 1)
+    # target node has shape that looks like this f32[3][3][320][320]
+    {1, 1, channels, r}
+  end
+
+  # lora up
+  defp conv_kernel_b(x_shape, wx_shape, r) do
+    IO.inspect(x_shape, label: "conv_kernel_b x")
+    IO.inspect(wx_shape, label: "conv_kernel_b wx")
+
+    rank = Nx.rank(x_shape)
+    channels = x_shape |> elem(rank - 1)
+    # target node has shape that looks like this f32[3][3][320][320]
+    {1, 1, r, channels}
+  end
+
+  defp dense_kernel_a(x_shape, wx_shape, r) do
+    IO.inspect(x_shape, label: "dense_kernel_a x")
+    IO.inspect(wx_shape, label: "dense_kernel_a wx")
+
     {r, elem(x_shape, Nx.rank(x_shape) - 1)}
   end
 
-  defp dense_kernel_b(_x_shape, wx_shape, r) do
+  defp dense_kernel_b(x_shape, wx_shape, r) do
+    IO.inspect(x_shape, label: "dense_kernel_b x")
+    IO.inspect(wx_shape, label: "dense_kernel_b wx")
+
     {elem(wx_shape, Nx.rank(wx_shape) - 1), r}
   end
 
