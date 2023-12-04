@@ -12,10 +12,37 @@ defmodule Lorax.Conversion do
       target_node_fn: calc_target_node_fn(params)
     }
 
+    # params =
+    #   Enum.map(params, fn {layer_name, tensor} ->
+    #     {translate_kohya_layer(layer_name), tensor}
+    #   end)
+
+    # todo: make this more universal, a la https://github.com/elixir-nx/bumblebee/blob/main/lib/bumblebee/conversion/pytorch.ex#L417
     params =
-      Enum.map(params, fn {layer_name, tensor} ->
-        {translate_kohya_layer(layer_name), tensor}
-      end)
+      for {layer_name, tensor} <- params, into: %{} do
+        # "lora_down_blocks.2.residual_blocks.1.conv_1.lora_up.weight"
+        # "lora_down_blocks.2.residual_blocks.1.conv_1.lora_up"
+        # since we only have kernel, should be fine
+        layer_name = translate_kohya_layer(layer_name)
+
+        split = layer_name |> String.split(".")
+
+        # grabs "lora_down"
+        {layer_name, param_name} =
+          if split |> List.last() == "alpha" do
+            layer_name = split |> Enum.drop(-1) |> Enum.join(".")
+            param_name = "alpha"
+
+            {layer_name, param_name}
+          else
+            layer_name = split |> Enum.drop(-2) |> Enum.join(".")
+            param_name = List.last(split)
+
+            {layer_name, param_name}
+          end
+
+        {layer_name, %{param_name => Nx.transpose(tensor)}}
+      end
 
     {config, params}
   end

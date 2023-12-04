@@ -200,7 +200,7 @@ defmodule Lorax do
   end
 
   defp create_lora_node(
-         %Axon.Node{name: target_name_fn, op: :conv},
+         %Axon.Node{name: target_name_fn, op: :conv, opts: opts} = node,
          parent_axons,
          dummy_axon,
          %Config{
@@ -215,15 +215,21 @@ defmodule Lorax do
     dropout_seed = dropout_seed || :erlang.system_time()
 
     # todo
+    kernel_size = opts[:kernel_size]
+    strides = opts[:strides]
+    padding = opts[:padding]
+
+    IO.inspect(opts, label: "creating lora node w/ opts")
+
     lora_A =
-      Axon.param("lora_a", &conv_kernel_a(&1, &2, r),
+      Axon.param("lora_down", &conv_kernel_a(&1, &2, r, kernel_size),
         initializer: :normal,
         type: param_type
       )
 
     # todo
     lora_B =
-      Axon.param("lora_b", &conv_kernel_b(&1, &2, r),
+      Axon.param("lora_up", &conv_kernel_b(&1, &2, r),
         initializer: :zeros,
         type: param_type
       )
@@ -235,7 +241,10 @@ defmodule Lorax do
       name: lora_name_fn,
       dropout: dropout,
       dropout_seed: dropout_seed,
-      scaling: scaling
+      scaling: scaling,
+      kernel_size: kernel_size,
+      strides: strides,
+      padding: padding
     )
     |> then(fn %Axon{output: lora_id, nodes: lora_nodes} ->
       # Extract out the node, throwaway the Axon container
@@ -261,13 +270,13 @@ defmodule Lorax do
     dropout_seed = dropout_seed || :erlang.system_time()
 
     lora_A =
-      Axon.param("lora_a", &dense_kernel_a(&1, &2, r),
+      Axon.param("lora_down", &dense_kernel_a(&1, &2, r),
         initializer: :normal,
         type: param_type
       )
 
     lora_B =
-      Axon.param("lora_b", &dense_kernel_b(&1, &2, r),
+      Axon.param("lora_up", &dense_kernel_b(&1, &2, r),
         initializer: :zeros,
         type: param_type
       )
@@ -290,9 +299,17 @@ defmodule Lorax do
   defnp lora_conv_impl(x, wx, lora_A, lora_B, opts \\ []) do
     scaling = opts[:scaling]
 
-    after_a = Axon.Layers.conv(x, lora_A)
+    # kernel_size = opts[:kernel_size]
+    strides = opts[:strides]
+    padding = opts[:padding]
+    conv_opts = [strides: strides, padding: padding]
+
+    after_a = Axon.Layers.conv(x, lora_A, conv_opts)
+    # |> print_expr(label: "after a")
     after_b = Axon.Layers.conv(after_a, lora_B)
+    # |> print_expr(label: "after b")
     bax = Nx.multiply(after_b, scaling)
+    # |> print_expr(label: "bax")
     Nx.add(wx, bax)
 
     # Apparently we can just fuse the kernels, so can just add the lora_A, lora_B
@@ -320,26 +337,31 @@ defmodule Lorax do
     end
   end
 
-  # lora down
-  defp conv_kernel_a(x_shape, wx_shape, r) do
+  # lora down, projects down to r channels
+  # the channels is equal to the # of in_features
+  # which we can determine with x_shape
+  defp conv_kernel_a(x_shape, wx_shape, r, kernel_size) do
     IO.inspect(x_shape, label: "conv_kernel_a x")
     IO.inspect(wx_shape, label: "conv_kernel_a wx")
 
     rank = Nx.rank(x_shape)
-    channels = x_shape |> elem(rank - 1)
+    in_features = x_shape |> elem(rank - 1)
     # target node has shape that looks like this f32[3][3][320][320]
-    {1, 1, channels, r}
+    {kernel_size, kernel_size, in_features, r}
+    |> IO.inspect(label: "convkernela")
   end
 
-  # lora up
+  # lora up, the channels is equal to the out_features
+  # which we can determine by wx
   defp conv_kernel_b(x_shape, wx_shape, r) do
     IO.inspect(x_shape, label: "conv_kernel_b x")
     IO.inspect(wx_shape, label: "conv_kernel_b wx")
 
-    rank = Nx.rank(x_shape)
-    channels = x_shape |> elem(rank - 1)
+    rank = Nx.rank(wx_shape)
+    out_features = wx_shape |> elem(rank - 1)
     # target node has shape that looks like this f32[3][3][320][320]
-    {1, 1, r, channels}
+    {1, 1, r, out_features}
+    |> IO.inspect(label: "convkernelb")
   end
 
   defp dense_kernel_a(x_shape, wx_shape, r) do
@@ -365,6 +387,13 @@ defmodule Lorax do
         acc
       end
     end)
+  end
+
+  defp calc_shortname(%Axon.Node{name: name_fn}) do
+    shortname =
+      name_fn.(:dense, nil)
+      |> String.split(".")
+      |> List.last()
   end
 
   defp get_target_nodes(
