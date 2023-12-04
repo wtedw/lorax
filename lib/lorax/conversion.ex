@@ -18,31 +18,48 @@ defmodule Lorax.Conversion do
     #   end)
 
     # todo: make this more universal, a la https://github.com/elixir-nx/bumblebee/blob/main/lib/bumblebee/conversion/pytorch.ex#L417
-    params =
-      for {layer_name, tensor} <- params, into: %{} do
-        # "lora_down_blocks.2.residual_blocks.1.conv_1.lora_up.weight"
-        # "lora_down_blocks.2.residual_blocks.1.conv_1.lora_up"
-        # since we only have kernel, should be fine
-        layer_name = translate_kohya_layer(layer_name)
+    # params =
+    #   for {layer_name, tensor} <- params, into: %{} do
+    #     # "lora_down_blocks.2.residual_blocks.1.conv_1.lora_up.weight"
+    #     # "lora_down_blocks.2.residual_blocks.1.conv_1.lora_up"
+    #     # since we only have kernel, should be fine
+    #     layer_name = translate_kohya_layer(layer_name)
 
-        split = layer_name |> String.split(".")
+    #     split = layer_name |> String.split(".")
 
-        # grabs "lora_down"
-        {layer_name, param_name} =
-          if split |> List.last() == "alpha" do
-            layer_name = split |> Enum.drop(-1) |> Enum.join(".")
-            param_name = "alpha"
+    #     # grabs "lora_down"
+    #     {layer_name, param_name} =
+    #       if split |> List.last() == "alpha" do
+    #         layer_name = split |> Enum.drop(-1) |> Enum.join(".")
+    #         param_name = "alpha"
 
-            {layer_name, param_name}
+    #         # {layer_name, param_name}
+    #         nil
+    #       else
+    #         layer_name = split |> Enum.drop(-2) |> Enum.join(".")
+    #         param_name = List.last(split)
+
+    #         # {layer_name, param_name}
+    #         {layer_name, %{param_name => Nx.transpose(tensor)}}
+    #       end
+    #   end
+
+      params =
+        Enum.reduce(params, %{}, fn {layer_name, tensor}, acc ->
+          layer_name = translate_kohya_layer(layer_name)
+          split = String.split(layer_name, ".")
+
+          if List.last(split) == "alpha" do
+            # Skip this iteration as we don't want anything related to 'alpha'
+            acc
           else
-            layer_name = split |> Enum.drop(-2) |> Enum.join(".")
+            new_layer_name = Enum.drop(split, -2) |> Enum.join(".")
             param_name = List.last(split)
 
-            {layer_name, param_name}
+            Map.put(acc, new_layer_name, %{param_name => Nx.transpose(tensor)})
           end
+        end)
 
-        {layer_name, %{param_name => Nx.transpose(tensor)}}
-      end
 
     {config, params}
   end
