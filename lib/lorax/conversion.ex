@@ -54,7 +54,8 @@ defmodule Lorax.Conversion do
             acc
           else
             new_layer_name = Enum.drop(split, -2) |> Enum.join(".")
-            param_name = List.last(split)
+            # param_name = List.last(split)
+            param_name = "kernel" # todo: remove this hack
 
             Map.put(acc, new_layer_name, %{param_name => Nx.transpose(tensor)})
           end
