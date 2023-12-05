@@ -44,23 +44,43 @@ defmodule Lorax.Conversion do
     #       end
     #   end
 
-      params =
-        Enum.reduce(params, %{}, fn {layer_name, tensor}, acc ->
-          layer_name = translate_kohya_layer(layer_name)
-          split = String.split(layer_name, ".")
+    params =
+      Enum.reduce(params, %{}, fn {layer_name, tensor}, acc ->
+        layer_name = translate_kohya_layer(layer_name)
+        split = String.split(layer_name, ".")
 
-          if List.last(split) == "alpha" do
-            # Skip this iteration as we don't want anything related to 'alpha'
-            acc
-          else
-            new_layer_name = Enum.drop(split, -2) |> Enum.join(".")
-            # param_name = List.last(split)
-            param_name = "kernel" # todo: remove this hack
+        # last is either alpha or weight
+        # if last is weight, then last2 is lora_down or lora_up
+        [last, last2 | _] = Enum.reverse(split)
 
-            Map.put(acc, new_layer_name, %{param_name => Nx.transpose(tensor)})
+        if last == "alpha" do
+          # Skip this iteration as we don't want anything related to 'alpha'
+          acc
+        else
+          new_layer_name = Enum.drop(split, -2) |> Enum.join(".")
+          param_name = last2
+          # param_name = "kernel" # todo: remove this hack
+
+          case Map.get(acc, new_layer_name) do
+            nil ->
+              Map.put(acc, new_layer_name, %{param_name => Nx.transpose(tensor)})
+
+            current_params ->
+              new_params = Map.put(current_params, param_name, Nx.transpose(tensor))
+              Map.put(acc, new_layer_name, new_params)
           end
-        end)
 
+          # Map.get_and_update(acc, new_layer_name, fn
+          #   nil ->
+          #     %{param_name => Nx.transpose(tensor)}
+
+          #   current_params ->
+          #     # IO.inspect(current_params)
+
+          #     Map.put(current_params, param_name, Nx.transpose(tensor))
+          # end)
+        end
+      end)
 
     {config, params}
   end
