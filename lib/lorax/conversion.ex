@@ -60,13 +60,20 @@ defmodule Lorax.Conversion do
           new_layer_name = Enum.drop(split, -2) |> Enum.join(".")
           param_name = last2
           # param_name = "kernel" # todo: remove this hack
+          tensor =
+            # it's a convolution kernel
+            if Nx.rank(tensor) == 4 do
+              Nx.transpose(tensor)
+            else
+              tensor
+            end
 
           case Map.get(acc, new_layer_name) do
             nil ->
-              Map.put(acc, new_layer_name, %{param_name => Nx.transpose(tensor)})
+              Map.put(acc, new_layer_name, %{param_name => tensor})
 
             current_params ->
-              new_params = Map.put(current_params, param_name, Nx.transpose(tensor))
+              new_params = Map.put(current_params, param_name, tensor)
               Map.put(acc, new_layer_name, new_params)
           end
 
