@@ -199,8 +199,92 @@ defmodule Lorax do
     end)
   end
 
+  defp get_kernel_shape(op, r, parameters) do
+    case op do
+      :conv ->
+        kernel_size = get_kernel_size(parameters)
+        {&conv_kernel_a(&1, &2, r, kernel_size), &conv_kernel_b(&1, &2, r)}
+
+      :dense ->
+        {&dense_kernel_a(&1, &2, r), &dense_kernel_b(&1, &2, r)}
+        |> IO.inspect(label: "shape")
+    end
+  end
+
+  def inject2(%Axon{} = model, %Config{r: r} = config) do
+    %MapSet{} = target_nodes = get_target_nodes2(model, config)
+
+    Axon.map_nodes(model, fn
+      %Axon.Node{id: id, op: op, parameters: parameters} = axon_node
+      when is_map_key(target_nodes.map, id) ->
+        shape = get_kernel_shape(op, r, parameters)
+        lora_a = Axon.param("lora_a", shape, initializer: :normal)
+        lora_b = Axon.param("lora_b", shape, initializer: :zeros)
+
+        lora_dropout_key =
+          Axon.param("lora_dropout_key", shape, initializer: :zeros, type: :u32)
+
+        Axon.wrap_node(axon_node, [lora_a, lora_b, lora_dropout_key], &lora_impl2/4,
+          injected_key: "lora_params"
+        )
+
+      axon_node ->
+        axon_node
+    end)
+  end
+
+  defp get_kernel_size(params) do
+    %Axon.Parameter{shape: shape} =
+      Enum.find(params, fn %Axon.Parameter{name: name} ->
+        name == "kernel"
+      end)
+
+    kernel_shape = shape.({nil, nil, nil, 1})
+    elem(kernel_shape, 0)
+  end
+
+  deftransform lora_impl2(
+                 [input, w_kernel],
+                 forward,
+                 %{
+                   "lora_a" => lora_a,
+                   "lora_b" => lora_b,
+                   "lora_dropout_key" => key
+                 },
+                 opts \\ []
+               ) do
+    dropout = opts[:dropout]
+    scaling = opts[:scaling]
+    mode = opts[:mode]
+
+    x = input
+    wx = forward.(input, w_kernel, mode: mode)
+
+    {x, next_key} =
+      case mode do
+        :inference -> {x, :ignored}
+        :train -> Axon.Layers.dropout(x, key, rate: dropout)
+      end
+
+    after_a = Axon.Layers.dense(x, lora_a |> Nx.transpose())
+    after_b = Nx.dot(after_a, lora_b |> Nx.transpose())
+    bax = Nx.multiply(after_b, scaling)
+    out = Nx.add(wx, bax)
+
+    case mode do
+      :inference ->
+        out
+
+      :train ->
+        %Axon.StatefulOutput{
+          output: out,
+          state: %{"lora_dropout_key" => next_key}
+        }
+    end
+  end
+
   defp create_lora_node(
-         %Axon.Node{name: target_name_fn, op: :conv, opts: opts} = node,
+         %Axon.Node{name: target_name_fn, op: :conv, opts: opts},
          parent_axons,
          dummy_axon,
          %Config{
@@ -378,6 +462,17 @@ defmodule Lorax do
     {elem(wx_shape, Nx.rank(wx_shape) - 1), r}
   end
 
+  defp get_target_nodes2(axon, %Config{target_node_fn: target_node_fn})
+       when is_function(target_node_fn, 1) do
+    Axon.reduce_nodes(axon, MapSet.new(), fn %Axon.Node{id: id} = node, map_set ->
+      if target_node_fn.(node) do
+        MapSet.put(map_set, id)
+      else
+        map_set
+      end
+    end)
+  end
+
   defp get_target_nodes(axon, %Config{target_node_fn: target_node_fn})
        when is_function(target_node_fn, 1) do
     Axon.reduce_nodes(axon, [], fn %Axon.Node{id: id} = node, acc ->
@@ -387,13 +482,6 @@ defmodule Lorax do
         acc
       end
     end)
-  end
-
-  defp calc_shortname(%Axon.Node{name: name_fn}) do
-    shortname =
-      name_fn.(:dense, nil)
-      |> String.split(".")
-      |> List.last()
   end
 
   defp get_target_nodes(
@@ -426,5 +514,11 @@ defmodule Lorax do
       %Axon.Node{}, acc ->
         acc
     end)
+  end
+
+  defp calc_shortname(%Axon.Node{name: name_fn}) do
+    name_fn.(nil, nil)
+    |> String.split(".")
+    |> List.last()
   end
 end
