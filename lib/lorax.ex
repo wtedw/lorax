@@ -73,6 +73,8 @@ defmodule Lorax do
 
   import Nx.Defn
 
+  defguardp is_map_set_member(map_set, elem) when is_map_key(map_set.map, elem)
+
   defmodule Config do
     @moduledoc """
     Config for `Lorax.inject/2`
@@ -199,6 +201,140 @@ defmodule Lorax do
     end)
   end
 
+  def inject2(%Axon{} = model, %Config{} = config) do
+    target_nodes = get_target_nodes(model, config)
+
+    Axon.map_nodes(model, fn
+      %Axon.Node{id: id} = axon_node when is_map_set_member(target_nodes, id) ->
+        wrap_target_node(axon_node, config)
+
+        axon_node ->
+          axon_node
+    end)
+  end
+
+  def wrap_target_node(
+        %Axon.Node{op: :dense, parameters: parameters} = axon_node,
+        %Config{r: r, alpha: alpha, dropout: dropout}
+      ) do
+    {a_shape, b_shape} = Lorax.Shape.calc_ab(:dense, r, parameters)
+    lora_a = Axon.param("lora_a", a_shape, initializer: :normal)
+    lora_b = Axon.param("lora_b", b_shape, initializer: :zeros)
+
+    lora_dropout_key =
+      Axon.param("lora_dropout_key", {}, initializer: :zeros, type: :u32)
+
+    scaling = alpha / r
+
+    Axon.wrap_node(axon_node, [lora_a, lora_b, lora_dropout_key], &dense_impl/4,
+      injected_key: "lora_parameters",
+      layer_opts: [scaling: scaling, dropout: dropout]
+    )
+  end
+
+  def wrap_target_node(
+        %Axon.Node{op: :conv, parameters: parameters, opts: conv_opts} = axon_node,
+        %Config{r: r, alpha: alpha, dropout: dropout}
+      ) do
+    {a_shape, b_shape} = Lorax.Shape.calc_ab(:conv, r, parameters)
+    lora_a = Axon.param("lora_a", a_shape, initializer: :normal)
+    lora_b = Axon.param("lora_b", b_shape, initializer: :zeros)
+
+    lora_dropout_key =
+      Axon.param("lora_dropout_key", {}, initializer: :zeros, type: :u32)
+
+    scaling = alpha / r
+
+    Axon.wrap_node(axon_node, [lora_a, lora_b, lora_dropout_key], &conv_impl/4,
+      injected_key: "lora_parameters",
+      layer_opts: conv_opts ++ [scaling: scaling, dropout: dropout]
+    )
+  end
+
+  deftransform conv_impl(
+                 [x | _] = input,
+                 forward,
+                 %{
+                   "lora_a" => lora_a,
+                   "lora_b" => lora_b,
+                   "lora_dropout_key" => key
+                 },
+                 opts \\ []
+               ) do
+    mode = opts[:mode]
+    dropout = opts[:dropout]
+    scaling = opts[:scaling]
+    strides = opts[:strides]
+    padding = opts[:padding]
+
+    conv_opts = [strides: strides, padding: padding]
+    forward_opts = [mode: mode] ++ conv_opts
+    wx = apply(forward, input ++ [forward_opts])
+
+    {x, next_key} =
+      case mode do
+        :inference -> {x, :ignored}
+        :train -> Axon.Layers.dropout(x, key, rate: dropout)
+      end
+
+    after_a = Axon.Layers.conv(x, lora_a, conv_opts)
+    after_b = Axon.Layers.conv(after_a, lora_b)
+    bax = Nx.multiply(after_b, scaling)
+    out = Nx.add(wx, bax)
+
+    case mode do
+      :inference ->
+        out
+
+      :train ->
+        %Axon.StatefulOutput{
+          output: out,
+          state: %{"lora_dropout_key" => next_key}
+        }
+    end
+  end
+
+  deftransform dense_impl(
+                 [x | _] = input,
+                 forward,
+                 %{
+                   "lora_a" => lora_a,
+                   "lora_b" => lora_b,
+                   "lora_dropout_key" => key
+                 },
+                 opts \\ []
+               ) do
+    mode = opts[:mode]
+    dropout = opts[:dropout]
+    scaling = opts[:scaling]
+
+    # input could just be kernel, or kernel + bias
+    # wx = forward.(input, w_kernel, bias, mode: mode)
+    wx = apply(forward, input ++ [[mode: mode]])
+
+    {x, next_key} =
+      case mode do
+        :inference -> {x, :ignored}
+        :train -> Axon.Layers.dropout(x, key, rate: dropout)
+      end
+
+    after_a = Axon.Layers.dense(x, lora_a |> Nx.transpose())
+    after_b = Nx.dot(after_a, lora_b |> Nx.transpose())
+    bax = Nx.multiply(after_b, scaling)
+    out = Nx.add(wx, bax)
+
+    case mode do
+      :inference ->
+        out
+
+      :train ->
+        %Axon.StatefulOutput{
+          output: out,
+          state: %{"lora_dropout_key" => next_key}
+        }
+    end
+  end
+
   defp create_lora_node(parent_axons, dummy_axon, %Config{
          r: r,
          alpha: alpha,
@@ -256,11 +392,11 @@ defmodule Lorax do
 
   defp get_target_nodes(axon, %Config{target_node_fn: target_node_fn})
        when is_function(target_node_fn, 1) do
-    Axon.reduce_nodes(axon, [], fn %Axon.Node{id: id} = node, acc ->
+    Axon.reduce_nodes(axon, MapSet.new(), fn %Axon.Node{id: id} = node, ids ->
       if target_node_fn.(node) do
-        [id | acc]
+        MapSet.put(ids, id)
       else
-        acc
+        ids
       end
     end)
   end
@@ -273,8 +409,8 @@ defmodule Lorax do
            target_value: target_value
          }
        ) do
-    Axon.reduce_nodes(axon, [], fn
-      %Axon.Node{id: id, name: name_fn, op: :dense}, acc ->
+    Axon.reduce_nodes(axon, MapSet.new(), fn
+      %Axon.Node{id: id, name: name_fn, op: :dense}, ids ->
         shortname =
           name_fn.(:dense, nil)
           |> String.split(".")
@@ -283,13 +419,13 @@ defmodule Lorax do
         if (target_key and shortname == "key") or
              (target_query and shortname == "query") or
              (target_value and shortname == "value") do
-          [id | acc]
+          MapSet.put(ids, id)
         else
-          acc
+          id
         end
 
-      %Axon.Node{}, acc ->
-        acc
+      %Axon.Node{}, ids ->
+        ids
     end)
   end
 end
