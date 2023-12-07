@@ -73,6 +73,8 @@ defmodule Lorax do
 
   import Nx.Defn
 
+  defguard is_map_set_member(map_set, elem) when is_map_key(map_set.map, elem)
+
   defmodule Config do
     @moduledoc """
     Config for `Lorax.inject/2`
@@ -225,41 +227,54 @@ defmodule Lorax do
     end
   end
 
-  def inject2(%Axon{} = model, %Config{r: r, alpha: alpha, dropout: dropout} = config) do
+  def inject2(%Axon{} = model, %Config{} = config) do
     %MapSet{} = target_nodes = get_target_nodes2(model, config)
 
     Axon.map_nodes(model, fn
-      %Axon.Node{id: id, op: op, parameters: parameters, opts: opts} = axon_node
-      when is_map_key(target_nodes.map, id) ->
-        {a_shape, b_shape} = get_kernel_shape(op, r, parameters)
-        lora_a = Axon.param("lora_a", a_shape, initializer: :normal)
-        lora_b = Axon.param("lora_b", b_shape, initializer: :zeros)
+      %Axon.Node{id: id} = node when is_map_set_member(target_nodes, id) ->
+        wrap_target_node(node, config)
 
-        lora_dropout_key =
-          Axon.param("lora_dropout_key", {}, initializer: :zeros, type: :u32)
-
-        scaling = alpha / r
-
-        impl_fn =
-          case op do
-            :dense -> &lora_impl2/4
-            :conv -> &lora_conv_impl2/4
-          end
-
-        layer_opts =
-          case op do
-            :dense -> [scaling: scaling, dropout: dropout]
-            :conv -> opts ++ [scaling: scaling, dropout: dropout]
-          end
-
-        Axon.wrap_node(axon_node, [lora_a, lora_b, lora_dropout_key], impl_fn,
-          injected_key: "lora_parameters",
-          layer_opts: layer_opts
-        )
-
-      axon_node ->
-        axon_node
+      node ->
+        node
     end)
+  end
+
+  def wrap_target_node(
+        %Axon.Node{op: :dense, parameters: parameters} = axon_node,
+        %Config{r: r, alpha: alpha, dropout: dropout}
+      ) do
+    {a_shape, b_shape} = get_kernel_shape(:dense, r, parameters)
+    lora_a = Axon.param("lora_a", a_shape, initializer: :normal)
+    lora_b = Axon.param("lora_b", b_shape, initializer: :zeros)
+
+    lora_dropout_key =
+      Axon.param("lora_dropout_key", {}, initializer: :zeros, type: :u32)
+
+    scaling = alpha / r
+
+    Axon.wrap_node(axon_node, [lora_a, lora_b, lora_dropout_key], &lora_impl2/4,
+      injected_key: "lora_parameters",
+      layer_opts: [scaling: scaling, dropout: dropout]
+    )
+  end
+
+  def wrap_target_node(
+        %Axon.Node{op: :conv, parameters: parameters, opts: conv_opts} = axon_node,
+        %Config{r: r, alpha: alpha, dropout: dropout}
+      ) do
+    {a_shape, b_shape} = get_kernel_shape(:conv, r, parameters)
+    lora_a = Axon.param("lora_a", a_shape, initializer: :normal)
+    lora_b = Axon.param("lora_b", b_shape, initializer: :zeros)
+
+    lora_dropout_key =
+      Axon.param("lora_dropout_key", {}, initializer: :zeros, type: :u32)
+
+    scaling = alpha / r
+
+    Axon.wrap_node(axon_node, [lora_a, lora_b, lora_dropout_key], &lora_conv_impl2/4,
+      injected_key: "lora_parameters",
+      layer_opts: conv_opts ++ [scaling: scaling, dropout: dropout]
+    )
   end
 
   deftransform lora_conv_impl2(
@@ -339,16 +354,13 @@ defmodule Lorax do
                  },
                  opts \\ []
                ) do
-    mode =
-      opts[:mode]
-      |> IO.inspect(label: "impl mode")
-
+    mode = opts[:mode]
     dropout = opts[:dropout]
     scaling = opts[:scaling]
 
-    forward_opts = [mode: mode]
-    wx = apply(forward, input ++ [forward_opts])
+    # input could just be bias, or kernel + bias
     # wx = forward.(input, w_kernel, bias, mode: mode)
+    wx = apply(forward, input ++ [[mode: mode]])
 
     {x, next_key} =
       case mode do
