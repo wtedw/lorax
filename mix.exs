@@ -25,10 +25,10 @@ defmodule Lorax.MixProject do
   defp deps do
     [
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
-      # {:axon, "~> 0.6.0"},
-      {:axon, path: "/Users/ted/CS/elixir/ex/axon"},
+      {:axon, "~> 0.6.0"},
+      # {:axon, path: "/Users/ted/CS/elixir/ex/axon"},
       {:nx, "~> 0.6.0"},
-      {:nx, github: "elixir-nx/nx", sparse: "nx", override: true},
+      # {:nx, github: "elixir-nx/nx", sparse: "nx", override: true},
       {:kino, "~> 0.11.0"},
       {:safetensors, "~> 0.1.2"}
     ]
