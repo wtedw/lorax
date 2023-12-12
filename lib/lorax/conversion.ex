@@ -133,6 +133,7 @@ defmodule Lorax.Conversion do
     Nx.type(random_tensor)
   end
 
+  # todo, can just return a list of all the kohya layers
   defp calc_target_node_fn(_params) do
     fn %Axon.Node{name: name_fn} ->
       split =

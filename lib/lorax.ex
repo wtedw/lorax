@@ -386,7 +386,7 @@ defmodule Lorax do
   end
 
   defp create_lora_node(
-         %Axon.Node{name: target_name_fn, op: :conv, opts: opts},
+         %Axon.Node{name: target_name_fn, op: :conv, opts: opts, parameters: parameters},
          parent_axons,
          dummy_axon,
          %Config{
@@ -401,25 +401,12 @@ defmodule Lorax do
     dropout_seed = dropout_seed || :erlang.system_time()
 
     # todo
-    kernel_size = opts[:kernel_size]
-    strides = opts[:strides]
-    padding = opts[:padding]
+    {a_shape, b_shape} = Lorax.Shape.calc_ab(:conv, r, parameters)
+    # strides = opts[:strides]
+    # padding = opts[:padding]
 
-    IO.inspect(opts, label: "creating lora node w/ opts")
-
-    lora_A =
-      Axon.param("lora_down", &conv_kernel_a(&1, &2, r, kernel_size),
-        initializer: :normal,
-        type: param_type
-      )
-
-    # todo
-    lora_B =
-      Axon.param("lora_up", &conv_kernel_b(&1, &2, r),
-        initializer: :zeros,
-        type: param_type
-      )
-
+    lora_A = Axon.param("lora_down", a_shape, initializer: :normal, type: param_type)
+    lora_B = Axon.param("lora_up", b_shape, initializer: :zeros, type: param_type)
     lora_name_fn = create_name_fn(target_name_fn)
 
     Axon.layer(&lora_conv_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
@@ -427,10 +414,10 @@ defmodule Lorax do
       name: lora_name_fn,
       dropout: dropout,
       dropout_seed: dropout_seed,
-      scaling: scaling,
-      kernel_size: kernel_size,
-      strides: strides,
-      padding: padding
+      layer_opts: opts,
+      scaling: scaling
+      # strides: strides,
+      # padding: padding
     )
     |> then(fn %Axon{output: lora_id, nodes: lora_nodes} ->
       # Extract out the node, throwaway the Axon container
@@ -441,7 +428,7 @@ defmodule Lorax do
   # Parent + dummy axon are inputs to create the lora node
   # target_node_name_fn is provided to help create a name for our new lora node
   defp create_lora_node(
-         %Axon.Node{name: target_name_fn, op: _target_op},
+         %Axon.Node{name: target_name_fn, opts: opts, op: target_op},
          parent_axons,
          dummy_axon,
          %Config{
@@ -484,18 +471,11 @@ defmodule Lorax do
 
   defnp lora_conv_impl(x, wx, lora_A, lora_B, opts \\ []) do
     scaling = opts[:scaling]
+    layer_opts = opts[:layer_opts]
 
-    # kernel_size = opts[:kernel_size]
-    strides = opts[:strides]
-    padding = opts[:padding]
-    conv_opts = [strides: strides, padding: padding]
-
-    after_a = Axon.Layers.conv(x, lora_A, conv_opts)
-    # |> print_expr(label: "after a")
+    after_a = Axon.Layers.conv(x, lora_A, layer_opts)
     after_b = Axon.Layers.conv(after_a, lora_B)
-    # |> print_expr(label: "after b")
     bax = Nx.multiply(after_b, scaling)
-    # |> print_expr(label: "bax")
     Nx.add(wx, bax)
 
     # Apparently we can just fuse the kernels, so can just add the lora_A, lora_B
@@ -517,6 +497,10 @@ defmodule Lorax do
   defp create_name_fn(target_name_fn) do
     fn op, op_count ->
       target_name = target_name_fn.(op, op_count)
+
+      IO.inspect(op, label: "== op")
+      IO.inspect(op_count, label: "== op")
+      IO.inspect(Function.info(target_name_fn), label: "lora node name_fn env")
 
       ("lora_" <> target_name)
       |> IO.inspect(label: "lora node name")
