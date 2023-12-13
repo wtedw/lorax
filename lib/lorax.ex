@@ -385,50 +385,50 @@ defmodule Lorax do
   #   end
   # end
 
-  # defp create_lora_node(
-  #        %Axon.Node{name: target_name_fn, op: :conv, opts: opts, parameters: parameters},
-  #        parent_axons,
-  #        dummy_axon,
-  #        %Config{
-  #          r: r,
-  #          alpha: alpha,
-  #          dropout: dropout,
-  #          dropout_seed: dropout_seed,
-  #          param_type: param_type
-  #        }
-  #      ) do
-  #   scaling = alpha / r
-  #   dropout_seed = dropout_seed || :erlang.system_time()
+  defp create_lora_node(
+         %Axon.Node{op: :conv, name: target_name_fn, opts: opts, parameters: parameters},
+         parent_axons,
+         dummy_axon,
+         %Config{
+           r: r,
+           alpha: alpha,
+           dropout: dropout,
+           dropout_seed: dropout_seed,
+           param_type: param_type
+         }
+       ) do
+    scaling = alpha / r
+    dropout_seed = dropout_seed || :erlang.system_time()
 
-  #   # todo
-  #   {a_shape, b_shape} = Lorax.Shape.calc_ab(:conv, r, parameters)
-  #   # strides = opts[:strides]
-  #   # padding = opts[:padding]
+    # todo
+    {a_shape, b_shape} = Lorax.Shape.calc_ab(:conv, r, parameters)
+    # strides = opts[:strides]
+    # padding = opts[:padding]
 
-  #   lora_A = Axon.param("lora_down", a_shape, initializer: :normal, type: param_type)
-  #   lora_B = Axon.param("lora_up", b_shape, initializer: :zeros, type: param_type)
-  #   lora_name_fn = create_name_fn(target_name_fn)
+    lora_A = Axon.param("lora_down", a_shape, initializer: :normal, type: param_type)
+    lora_B = Axon.param("lora_up", b_shape, initializer: :zeros, type: param_type)
+    lora_name_fn = create_name_fn(target_name_fn)
 
-  #   Axon.layer(&lora_conv_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
-  #     op_name: :lora,
-  #     name: lora_name_fn,
-  #     dropout: dropout,
-  #     dropout_seed: dropout_seed,
-  #     layer_opts: opts,
-  #     scaling: scaling
-  #     # strides: strides,
-  #     # padding: padding
-  #   )
-  #   |> then(fn %Axon{output: lora_id, nodes: lora_nodes} ->
-  #     # Extract out the node, throwaway the Axon container
-  #     %Axon.Node{} = lora_nodes[lora_id]
-  #   end)
-  # end
+    Axon.layer(&lora_conv_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
+      op_name: :lora,
+      name: lora_name_fn,
+      dropout: dropout,
+      dropout_seed: dropout_seed,
+      layer_opts: opts,
+      scaling: scaling
+      # strides: strides,
+      # padding: padding
+    )
+    |> then(fn %Axon{output: lora_id, nodes: lora_nodes} ->
+      # Extract out the node, throwaway the Axon container
+      %Axon.Node{} = lora_nodes[lora_id]
+    end)
+  end
 
   # Parent + dummy axon are inputs to create the lora node
   # target_node_name_fn is provided to help create a name for our new lora node
   defp create_lora_node(
-         %Axon.Node{name: target_name_fn, opts: opts, op: target_op},
+         %Axon.Node{op: :dense, name: target_name_fn, opts: opts},
          parent_axons,
          dummy_axon,
          %Config{
