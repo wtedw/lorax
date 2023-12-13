@@ -409,6 +409,8 @@ defmodule Lorax do
     lora_B = Axon.param("lora_up", b_shape, initializer: :zeros, type: param_type)
     lora_name_fn = create_name_fn(target_name_fn)
 
+    IO.puts(lora_name_fn.(nil, nil), label: "Creating conv LoRA node")
+
     Axon.layer(&lora_conv_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
       op_name: :lora,
       name: lora_name_fn,
@@ -456,6 +458,8 @@ defmodule Lorax do
 
     lora_name_fn = create_name_fn(target_name_fn)
 
+    IO.puts(lora_name_fn.(nil, nil), label: "Creating dense LoRA node")
+
     Axon.layer(&lora_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
       op_name: :lora,
       name: lora_name_fn,
@@ -498,12 +502,7 @@ defmodule Lorax do
     fn op, op_count ->
       target_name = target_name_fn.(op, op_count)
 
-      IO.inspect(op, label: "== op")
-      IO.inspect(op_count, label: "== op")
-      IO.inspect(Function.info(target_name_fn), label: "lora node name_fn env")
-
-      ("lora_" <> target_name)
-      |> IO.inspect(label: "lora node name")
+      "lora_" <> target_name
     end
   end
 
@@ -511,78 +510,53 @@ defmodule Lorax do
   # the channels is equal to the # of in_features
   # which we can determine with x_shape
   defp conv_kernel_a(x_shape, wx_shape, r, kernel_size) do
-    IO.inspect(x_shape, label: "conv_kernel_a x")
-    IO.inspect(wx_shape, label: "conv_kernel_a wx")
-
     rank = Nx.rank(x_shape)
     in_features = x_shape |> elem(rank - 1)
     # target node has shape that looks like this f32[3][3][320][320]
     {kernel_size, kernel_size, in_features, r}
-    |> IO.inspect(label: "convkernela")
   end
 
   defp conv_kernel_a2(x_shape, r, kernel_size, _input_channels) do
-    IO.inspect(x_shape, label: "conv_kernel_a x")
-
     # in features should == input_channels
     rank = Nx.rank(x_shape)
     in_features = x_shape |> elem(rank - 1)
     # target node has shape that looks like this f32[3][3][320][320]
     {kernel_size, kernel_size, in_features, r}
-    |> IO.inspect(label: "convkernela2")
   end
 
   defp conv_kernel_b2(x_shape, r, output_filters) do
-    IO.inspect(x_shape, label: "conv_kernel_b x")
-
     # rank = Nx.rank(wx_shape)
     # out_features = wx_shape |> elem(rank - 1)
     # target node has shape that looks like this f32[3][3][320][320]
     {1, 1, r, output_filters}
-    |> IO.inspect(label: "convkernelb2")
   end
 
   # lora up, the channels is equal to the out_features
   # which we can determine by wx
   defp conv_kernel_b(x_shape, wx_shape, r) do
-    IO.inspect(x_shape, label: "conv_kernel_b x")
-    IO.inspect(wx_shape, label: "conv_kernel_b wx")
-
     rank = Nx.rank(wx_shape)
     out_features = wx_shape |> elem(rank - 1)
     # target node has shape that looks like this f32[3][3][320][320]
     {1, 1, r, out_features}
-    |> IO.inspect(label: "convkernelb")
   end
 
   defp dense_kernel_a(x_shape, wx_shape, r) do
-    IO.inspect(x_shape, label: "dense_kernel_a x")
-    IO.inspect(wx_shape, label: "dense_kernel_a wx")
-
     {r, elem(x_shape, Nx.rank(x_shape) - 1)}
   end
 
   defp dense_kernel_b(x_shape, wx_shape, r) do
-    IO.inspect(x_shape, label: "dense_kernel_b x")
-    IO.inspect(wx_shape, label: "dense_kernel_b wx")
-
     {elem(wx_shape, Nx.rank(wx_shape) - 1), r}
   end
 
   defp dense_kernel_a2(x_shape, r) do
-    IO.inspect(x_shape, label: "dense_a2 x input shape")
-
     {r, elem(x_shape, Nx.rank(x_shape) - 1)}
-    |> IO.inspect(label: "dense_kernel_a2 kernel shape")
   end
 
   # todo: okay for now (maybe), but really we'd need to see what the target kernel shape looks like
   defp dense_kernel_b2(x_shape, r, output_features) do
     x_shape
-    |> IO.inspect(label: "dense_b2 x input shape")
 
     {output_features, r}
-    |> IO.inspect(label: "dense_kernel_b2 kernel shape")
   end
 
   defp get_target_nodes2(axon, %Config{target_node_fn: target_node_fn})
