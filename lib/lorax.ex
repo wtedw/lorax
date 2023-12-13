@@ -409,7 +409,7 @@ defmodule Lorax do
     lora_B = Axon.param("lora_up", b_shape, initializer: :zeros, type: param_type)
     lora_name_fn = create_name_fn(target_name_fn)
 
-    IO.puts(lora_name_fn.(nil, nil), label: "Creating conv LoRA node")
+    IO.inspect(lora_name_fn.(nil, nil), label: "Creating conv LoRA node")
 
     Axon.layer(&lora_conv_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
       op_name: :lora,
@@ -458,7 +458,7 @@ defmodule Lorax do
 
     lora_name_fn = create_name_fn(target_name_fn)
 
-    IO.puts(lora_name_fn.(nil, nil), label: "Creating dense LoRA node")
+    IO.inspect(lora_name_fn.(nil, nil), label: "Creating dense LoRA node")
 
     Axon.layer(&lora_impl/5, parent_axons ++ [dummy_axon, lora_A, lora_B],
       op_name: :lora,
