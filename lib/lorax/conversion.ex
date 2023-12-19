@@ -1,48 +1,27 @@
 defmodule Lorax.Conversion do
   @doc """
+  Loads some serialized param data and returns a best-guess config for injection, and lora params
+  """
+  def load!(data) do
+    params = Safetensors.load!(data)
+    create_config_params(params)
+  end
+
+  @doc """
   Reads a safetensor file and returns a best-guess config for injection, and lora params
   """
-  def read(path) do
+  def read!(path) do
     params = Safetensors.read!(path)
+    create_config_params(params)
+  end
 
+  defp create_config_params(params) do
     config = %Lorax.Config{
       r: calc_r(params),
       alpha: calc_alpha(params),
       param_type: calc_param_type(params),
       target_node_fn: calc_target_node_fn(params)
     }
-
-    # params =
-    #   Enum.map(params, fn {layer_name, tensor} ->
-    #     {translate_kohya_layer(layer_name), tensor}
-    #   end)
-
-    # todo: make this more universal, a la https://github.com/elixir-nx/bumblebee/blob/main/lib/bumblebee/conversion/pytorch.ex#L417
-    # params =
-    #   for {layer_name, tensor} <- params, into: %{} do
-    #     # "lora_down_blocks.2.residual_blocks.1.conv_1.lora_up.weight"
-    #     # "lora_down_blocks.2.residual_blocks.1.conv_1.lora_up"
-    #     # since we only have kernel, should be fine
-    #     layer_name = translate_kohya_layer(layer_name)
-
-    #     split = layer_name |> String.split(".")
-
-    #     # grabs "lora_down"
-    #     {layer_name, param_name} =
-    #       if split |> List.last() == "alpha" do
-    #         layer_name = split |> Enum.drop(-1) |> Enum.join(".")
-    #         param_name = "alpha"
-
-    #         # {layer_name, param_name}
-    #         nil
-    #       else
-    #         layer_name = split |> Enum.drop(-2) |> Enum.join(".")
-    #         param_name = List.last(split)
-
-    #         # {layer_name, param_name}
-    #         {layer_name, %{param_name => Nx.transpose(tensor)}}
-    #       end
-    #   end
 
     params =
       Enum.reduce(params, %{}, fn {layer_name, tensor}, acc ->
@@ -60,8 +39,8 @@ defmodule Lorax.Conversion do
           new_layer_name = Enum.drop(split, -2) |> Enum.join(".")
           param_name = last2
           # param_name = "kernel" # todo: remove this hack
+          # it's a convolution kernel
           tensor =
-            # it's a convolution kernel
             if Nx.rank(tensor) == 4 do
               Nx.transpose(tensor)
             else
@@ -76,16 +55,6 @@ defmodule Lorax.Conversion do
               new_params = Map.put(current_params, param_name, tensor)
               Map.put(acc, new_layer_name, new_params)
           end
-
-          # Map.get_and_update(acc, new_layer_name, fn
-          #   nil ->
-          #     %{param_name => Nx.transpose(tensor)}
-
-          #   current_params ->
-          #     # IO.inspect(current_params)
-
-          #     Map.put(current_params, param_name, Nx.transpose(tensor))
-          # end)
         end
       end)
 
@@ -134,6 +103,7 @@ defmodule Lorax.Conversion do
   end
 
   # todo, can just return a list of all the kohya layers
+  # also, this target_node_fn is hardcoded for LCM-LoRA
   defp calc_target_node_fn(_params) do
     fn %Axon.Node{name: name_fn} ->
       split =
