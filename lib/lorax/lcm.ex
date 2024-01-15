@@ -1,6 +1,6 @@
-defmodule Lorax.Conversion do
+defmodule Lorax.Lcm do
   @doc """
-  Loads some serialized param data and returns a best-guess config for injection, and lora params
+  Loads some serialized LCM LoRA data and returns a returns a tuple of `{%Lorax.Config{}, lora_params}`
   """
   def load!(data) do
     params = Safetensors.load!(data)
@@ -8,7 +8,7 @@ defmodule Lorax.Conversion do
   end
 
   @doc """
-  Reads a safetensor file and returns a best-guess config for injection, and lora params
+  Reads some LCM LoRA safetensor file and returns a tuple of `{%Lorax.Config{}, lora_params}`
   """
   def read!(path) do
     params = Safetensors.read!(path)
@@ -38,7 +38,7 @@ defmodule Lorax.Conversion do
         else
           new_layer_name = Enum.drop(split, -2) |> Enum.join(".")
           param_name = last2
-          # param_name = "kernel" # todo: remove this hack
+
           # it's a convolution kernel
           tensor =
             if Nx.rank(tensor) == 4 do
@@ -72,7 +72,7 @@ defmodule Lorax.Conversion do
     if length(lora_ranks) == 1 do
       List.first(lora_ranks)
     else
-      {:error, "Lorax does not support multiple ranks at the moment"}
+      {:error, "Invalid LCM LoRA params. r values should all be the same"}
     end
   end
 
@@ -88,7 +88,7 @@ defmodule Lorax.Conversion do
     if length(lora_alphas) == 1 do
       lora_alphas |> List.first() |> Nx.to_number()
     else
-      {:error, "Lorax does not support multiple alphas"}
+      {:error, "Invalid LCM LoRA params. alpha values should all be the same"}
     end
   end
 
@@ -102,8 +102,6 @@ defmodule Lorax.Conversion do
     Nx.type(random_tensor)
   end
 
-  # todo, can just return a list of all the kohya layers
-  # also, this target_node_fn is hardcoded for LCM-LoRA
   defp calc_target_node_fn(_params) do
     fn %Axon.Node{name: name_fn} ->
       split =
@@ -143,15 +141,6 @@ defmodule Lorax.Conversion do
       shortname in target_shortnames or twoname in target_twonames
     end
   end
-
-  # defp is_kohya_params?(params) do
-  #   # is_kohya_params =
-  #   #   params
-  #   #   |> Enum.map(fn {k, _} -> String.starts_with?(k, "lora_unet") end)
-  #   #   |> Enum.all?()
-
-  #   # IO.inspect(is_kohya_params, label: "iskohya?")
-  # end
 
   defp translate_kohya_layer(layer_name) do
     layer_name
