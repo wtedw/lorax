@@ -1,4 +1,4 @@
-# Stable Diffusion w/ LCM LoRA - Realtime
+# Stable Diffusion w/ LCM (Realtime)
 
 ```elixir
 Mix.install(
@@ -78,10 +78,10 @@ serving =
 
 ### Realtime LCM LoRA
 
+Run all the following cells and begin typing in the prompt below. The Kino frame beneath the prompt should reflect new images. Debounce value can be changed to control how fast the images should refresh
+
 This has been tested on the NVIDIA A10G and above.
 Make sure you use a high end graphics card for this or else the frame below will be blank for quite a long time.
-
-Debounce value controls how fast the images should refresh
 
 ```elixir
 input = Kino.Input.textarea("Prompt", debounce: 150)

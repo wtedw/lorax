@@ -6,7 +6,7 @@ defmodule Lorax.MixProject do
   def project do
     [
       app: :lorax,
-      version: "0.1.0",
+      version: "0.2.0",
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -37,7 +37,9 @@ defmodule Lorax.MixProject do
       extras: [
         "README.md",
         "guides/finetuning_gpt_with_lora.livemd",
-        "guides/running_gpt_with_lora.livemd"
+        "guides/running_gpt_with_lora.livemd",
+        "guides/lcm_lora.livemd",
+        "guides/lcm_lora_realtime.livemd"
       ],
       main: "readme",
       before_closing_body_tag: fn
