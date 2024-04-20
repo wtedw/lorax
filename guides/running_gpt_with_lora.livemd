@@ -4,14 +4,14 @@
 
 ```elixir
 Mix.install([
-  {:bumblebee, "~> 0.4.2"},
-  {:axon, "~> 0.6.0"},
-  {:nx, "~> 0.6.1"},
-  {:exla, "~> 0.6.1"},
+  {:bumblebee, "~> 0.5.3"},
+  {:axon, "~> 0.6.1"},
+  {:nx, "~> 0.7.1"},
+  {:exla, "~> 0.7.1"},
   {:explorer, "~> 0.7.0"},
-  {:lorax, "~> 0.1.0"},
+  {:lorax, "~> 0.2.1"},
   {:req, "~> 0.4.0"},
-  {:kino, "~> 0.11.0"}
+  {:kino, "~> 0.12.3"}
 ])
 
 Nx.default_backend(EXLA.Backend)
@@ -89,7 +89,7 @@ There's 3 main ways to load your LoRA params
 See the code below for examples
 
 ```elixir
-# Method 1: URL downlaod 
+# Method 1: URL downlaod
 lora_serialized =
   Req.get!("https://raw.githubusercontent.com/wtedw/lorax/main/params/elixir-chat-r4a8.lorax").body
 lora_only_params = Nx.deserialize(lora_serialized)
@@ -99,10 +99,10 @@ lora_only_params |> Map.keys()
 # lora_only_params = Lorax.Params.file_load!("<insert local path>")
 
 # Method 3: Kino
-# cell #1 
+# cell #1
 # input = Kino.Input.file("Lorax Params")
 #
-# cell #2 
+# cell #2
 # lora_only_params = Lorax.Params.kino_file_load!(input)
 # merged_params = Lorax.Params.merge_params(lora_only_params, gpt2_params)
 ```

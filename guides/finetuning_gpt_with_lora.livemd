@@ -4,13 +4,13 @@
 
 ```elixir
 Mix.install([
-  {:bumblebee, "~> 0.4.2"},
-  {:axon, "~> 0.6.0"},
-  {:nx, "~> 0.6.1"},
-  {:exla, "~> 0.6.1"},
-  {:lorax, "~> 0.1.0"},
+  {:bumblebee, "~> 0.5.3"},
+  {:axon, "~> 0.6.1"},
+  {:nx, "~> 0.7.1"},
+  {:exla, "~> 0.7.1"},
+  {:lorax, "~> 0.2.1"},
   {:req, "~> 0.4.0"},
-  {:kino, "~> 0.11.0"}
+  {:kino, "~> 0.12.3"}
 ])
 
 Nx.default_backend(EXLA.Backend)
@@ -171,7 +171,7 @@ defmodule DataStream do
             {k, batch_slice}
           end
 
-        # y represents all the predicted next tokens (input_ids shifted by 1) 
+        # y represents all the predicted next tokens (input_ids shifted by 1)
         y =
           ix
           |> Enum.map(fn i ->
@@ -351,7 +351,7 @@ lora_only =
   |> Lorax.Params.filter(params)
   |> Lorax.Params.kino_download()
 
-# Method #2 
+# Method #2
 # serialized =
 #   Lorax.Params.filter(lora_merged_params, params)
 #   |> Nx.serialize()
