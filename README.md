@@ -52,8 +52,8 @@ lora_params = lora_merged_params
 In practice, every model has some unique architecture that you need to account for.
 For more detailed guides, see
 
-1. [Finetuning LLMs with LoRA](finetuning_gpt_with_lora.livemd)
-2. [Running LLMs with LoRA](running_gpt_with_lora.livemd)
+1. [Finetuning LLMs with LoRA](guides/finetuning_gpt_with_lora.livemd)
+2. [Running LLMs with LoRA](guides/running_gpt_with_lora.livemd)
 
 ## Default Settings
 
