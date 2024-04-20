@@ -6,7 +6,7 @@ defmodule Lorax.MixProject do
   def project do
     [
       app: :lorax,
-      version: "0.2.0",
+      version: "0.2.1",
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -25,10 +25,10 @@ defmodule Lorax.MixProject do
   defp deps do
     [
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
-      {:axon, "~> 0.6.0"},
-      {:nx, "~> 0.6.0"},
-      {:kino, "~> 0.11.0"},
-      {:safetensors, "~> 0.1.2"}
+      {:axon, "~> 0.6.1"},
+      {:nx, "~> 0.7.1"},
+      {:kino, "~> 0.12.3"},
+      {:safetensors, "~> 0.1.3"}
     ]
   end
 
